@@ -1,0 +1,10 @@
+state_bucket = "lata-velha-tfstate-<ACCOUNT_ID>"
+
+# Cole aqui EXATAMENTE o conteudo de app/src/main/resources/app.key e
+# app.pub (o app usa esse par para assinar/validar os tokens hoje). Se
+# preferir nao versionar nem em .tfvars local, exporte como variavel de
+# ambiente em vez de preencher aqui:
+#   export TF_VAR_jwt_private_key_pem="$(cat ../../app/src/main/resources/app.key)"
+#   export TF_VAR_jwt_public_key_pem="$(cat ../../app/src/main/resources/app.pub)"
+jwt_private_key_pem = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+jwt_public_key_pem  = "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n"
