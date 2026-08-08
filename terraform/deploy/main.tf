@@ -28,48 +28,39 @@ locals {
   db_port = tonumber(split(":", local.infra_db.rds_endpoint)[1])
 }
 
-# Fonte unica da chave JWT (RS256) e das credenciais do banco para a lambda.
-# A chave privada aqui PRECISA ser a mesma configurada em app.key/app.pub no
-# app (JwtConfig.java) — do contrario o JwtDecoder do app rejeita os tokens
-# emitidos por esta function.
-resource "aws_secretsmanager_secret" "auth_cpf" {
-  name        = "${var.project_name}/auth-cpf-lambda"
-  description = "Chave JWT (RS256, compartilhada com o app) + credenciais do RDS usadas pela lambda de login por CPF"
-}
-
-resource "aws_secretsmanager_secret_version" "auth_cpf" {
-  secret_id = aws_secretsmanager_secret.auth_cpf.id
-  secret_string = jsonencode({
-    jwtPrivateKey = var.jwt_private_key_pem
-    jwtPublicKey  = var.jwt_public_key_pem
-    jwtIssuer     = var.jwt_issuer
-    jwtExpiresIn  = var.jwt_expires_in
-    dbHost        = local.db_host
-    dbPort        = local.db_port
-    dbName        = local.infra_db.db_name
-    dbUser        = local.infra_db.db_username
-    dbPassword    = local.infra_db.db_password
-  })
-}
-
+# Fonte unica da chave JWT (RS256) e das credenciais do banco para a lambda —
+# passadas direto como variavel de ambiente da function (sem Secrets Manager,
+# ver lambda/README.md). A chave privada aqui PRECISA ser a mesma configurada
+# em app.key/app.pub no app (JwtConfig.java) — do contrario o JwtDecoder do
+# app rejeita os tokens emitidos por esta function.
 module "auth_cpf_lambda" {
   source = "../modules/auth-cpf-lambda"
 
   project_name       = var.project_name
   vpc_id             = local.bootstrap.vpc_id
   private_subnet_ids = local.bootstrap.private_subnet_ids
-  secret_arn         = aws_secretsmanager_secret.auth_cpf.arn
   dist_dir           = "${path.module}/../../dist"
   timeout            = var.lambda_timeout
   memory_size        = var.lambda_memory_size
+
+  jwt_private_key_pem = var.jwt_private_key_pem
+  jwt_public_key_pem  = var.jwt_public_key_pem
+  jwt_issuer          = var.jwt_issuer
+  jwt_expires_in      = var.jwt_expires_in
+  db_host             = local.db_host
+  db_port             = local.db_port
+  db_name             = local.infra_db.db_name
+  db_user             = local.infra_db.db_username
+  db_password         = local.infra_db.db_password
 }
 
 # --------------------------------------------------------------------------
 # Lambda authorizer do API Gateway do app (repo infra). Duplica, na borda,
 # a mesma verificacao de assinatura/issuer/expiracao que o JwtDecoder do app
 # ja faz — nao decide autorizacao por role, isso continua 100% no
-# SecurityConfig do app. Le o MESMO secret da lambda auth-cpf (usa so o
-# campo jwtPublicKey).
+# SecurityConfig do app. Recebe so a chave publica RSA + issuer (mesma da
+# lambda auth-cpf) como variavel de ambiente — sem chave privada, sem
+# credenciais do banco.
 #
 # So a FUNCAO e criada aqui — quem anexa ela ao API Gateway (aws_apigatewayv2_authorizer,
 # aws_lambda_permission, rotas protegidas) e o modulo app-gateway no repo
@@ -81,7 +72,8 @@ module "auth_cpf_lambda" {
 module "jwt_authorizer_lambda" {
   source = "../modules/jwt-authorizer-lambda"
 
-  project_name = var.project_name
-  secret_arn   = aws_secretsmanager_secret.auth_cpf.arn
-  dist_dir     = "${path.module}/../../dist"
+  project_name       = var.project_name
+  dist_dir           = "${path.module}/../../dist"
+  jwt_public_key_pem = var.jwt_public_key_pem
+  jwt_issuer         = var.jwt_issuer
 }

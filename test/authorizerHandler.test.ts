@@ -2,12 +2,10 @@ import { generateKeyPairSync } from "crypto";
 import jwt from "jsonwebtoken";
 import type { APIGatewayRequestAuthorizerEventV2 } from "aws-lambda";
 
-jest.mock("../src/secretsManager", () => ({ getAuthCpfSecret: jest.fn() }));
+jest.mock("../src/authorizerConfig", () => ({ authorizerConfig: {} }));
 
-import { getAuthCpfSecret, AuthCpfSecret } from "../src/secretsManager";
+import { authorizerConfig as mockAuthorizerConfig, JwtPublicConfig } from "../src/authorizerConfig";
 import { handler } from "../src/authorizerHandler";
-
-const mockedGetAuthCpfSecret = getAuthCpfSecret as jest.MockedFunction<typeof getAuthCpfSecret>;
 
 const { publicKey, privateKey } = generateKeyPairSync("rsa", {
   modulusLength: 2048,
@@ -15,16 +13,9 @@ const { publicKey, privateKey } = generateKeyPairSync("rsa", {
   privateKeyEncoding: { type: "pkcs8", format: "pem" },
 });
 
-const secret: AuthCpfSecret = {
-  jwtPrivateKey: privateKey,
+const secret: JwtPublicConfig = {
   jwtPublicKey: publicKey,
   jwtIssuer: "lata-velha",
-  jwtExpiresIn: 3600,
-  dbHost: "localhost",
-  dbPort: 5432,
-  dbName: "lata_velha",
-  dbUser: "admin",
-  dbPassword: "admin123",
 };
 
 function eventWithAuthHeader(authorization?: string): APIGatewayRequestAuthorizerEventV2 {
@@ -44,7 +35,7 @@ function signToken(overrides: Partial<jwt.SignOptions> = {}, key: string = priva
 }
 
 beforeEach(() => {
-  mockedGetAuthCpfSecret.mockResolvedValue(secret);
+  Object.assign(mockAuthorizerConfig, secret);
 });
 
 describe("authorizer handler", () => {

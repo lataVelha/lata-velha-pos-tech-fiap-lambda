@@ -14,7 +14,8 @@ Gateway próprio — as duas são anexadas ao **único** API Gateway do app (rep
 - [A lambda authorizer (`jwt-authorizer`)](#a-lambda-authorizer-jwt-authorizer)
 - [Estrutura](#estrutura)
 - [Dependências](#dependências)
-- [O segredo (Secrets Manager)](#o-segredo-secrets-manager)
+- [CI/CD (GitHub Actions)](#cicd-github-actions)
+- [Configuração (variáveis de ambiente)](#configuração-variáveis-de-ambiente)
 - [Execução local (código)](#execução-local-código)
 - [Deploy (Terraform)](#deploy-terraform)
 - [Notas de segurança](#notas-de-segurança)
@@ -26,12 +27,11 @@ Gateway próprio — as duas são anexadas ao **único** API Gateway do app (rep
 ```
                               ┌── POST /auth/cpf ───────▶ Lambda auth-cpf ──▶ RDS Postgres (tabela USERS)
                               │                                │
-cliente ──▶ API Gateway (repo infra, único) ─┤                                ▼
-                              │                                Secrets Manager
-                              │                          (chave RSA priv+pub + credenciais RDS)
-                              │                                ▲
-                              └── ANY /rota-protegida ──▶ Lambda jwt-authorizer (só lê a chave pública)
-                                          │ isAuthorized?
+cliente ──▶ API Gateway (repo infra, único) ─┤                       (chave RSA priv + credenciais RDS
+                              │                                        via variavel de ambiente)
+                              │
+                              └── ANY /rota-protegida ──▶ Lambda jwt-authorizer (só a chave pública,
+                                          │ isAuthorized?           via variavel de ambiente)
                                           ▼
                                   ALB interno ──▶ app (Spring Boot / EKS)
 ```
@@ -73,7 +73,7 @@ rotas protegidas do API Gateway do app (repo `infra`, módulo `app-gateway`) —
 autorização do API Gateway v2, extrai o header `Authorization: Bearer <token>` e:
 
 1. Sem header ou sem prefixo `Bearer ` → `{ "isAuthorized": false }` (API Gateway responde `401`).
-2. Verifica a assinatura **RS256** com a chave pública do mesmo secret da `auth-cpf`, e o `issuer`. Assinatura inválida, expirado ou issuer errado → `{ "isAuthorized": false }`.
+2. Verifica a assinatura **RS256** com a mesma chave pública da `auth-cpf` (recebida via variável de ambiente, não lida em runtime de lugar nenhum) e o `issuer`. Assinatura inválida, expirado ou issuer errado → `{ "isAuthorized": false }`.
 3. Válido → `{ "isAuthorized": true, "context": { "sub": "...", "scope": "..." } }`.
 
 Ela **não decide autorização por role** — só "esse token é válido ou não". Quem decide se
@@ -82,7 +82,7 @@ Ela **não decide autorização por role** — só "esse token é válido ou nã
 cedo, no edge, requisições sem um token válido, sem gastar um hop até o ALB/pod.
 
 Diferente da `auth-cpf`, essa função **não roda na VPC** (não acessa o RDS, só verifica uma
-assinatura com a chave pública que já está no secret) — cold start bem mais rápido.
+assinatura com a chave pública que já recebeu na variável de ambiente) — cold start bem mais rápido.
 
 ## Estrutura
 
@@ -92,9 +92,10 @@ src/                            # código das duas lambdas (Node.js + TypeScript
 ├── authorizerHandler.ts         # entrypoint da jwt-authorizer (API Gateway REQUEST authorizer v2)
 ├── cpf.ts                       # validação de CPF (mesmo algoritmo do Documento.java do app)
 ├── db.ts                        # consulta USERS por cpf (pg) — só a auth-cpf usa
-├── jwtSigner.ts                  # assina o JWT RS256 com a chave do secret — só a auth-cpf usa
-├── secretsManager.ts             # busca + cacheia o secret (Secrets Manager) — as duas usam
-├── config.ts                     # variáveis de ambiente
+├── jwtSigner.ts                  # assina o JWT RS256 com a chave privada — só a auth-cpf usa
+├── config.ts                     # config completa (JWT priv/pub + credenciais RDS) — só a auth-cpf usa
+├── authorizerConfig.ts           # config minima (so JWT pub + issuer) — só a jwt-authorizer usa
+├── env.ts                        # helper compartilhado pra ler variavel de ambiente obrigatoria
 └── httpError.ts                   # erros tipados (400/403/404) — só a auth-cpf usa
 test/                            # jest
 terraform/
@@ -109,38 +110,67 @@ terraform/
 
 - **Lê** o remote state do bootstrap do repo [`infra`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra) (`vpc_id`, `private_subnet_ids`) — a `auth-cpf` roda dentro da VPC porque o RDS só aceita conexões de dentro dela. A `jwt-authorizer` não usa isso (não roda na VPC).
 - **Lê** o remote state do repo [`infra-db`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra-db) (`rds_endpoint`, `db_name`, `db_username`, `db_password`) — só a `auth-cpf` usa.
-- Precisa rodar **depois** de `infra` bootstrap e `infra-db`, e **antes** de `infra` addons — os outputs `jwt_authorizer_invoke_arn`/`jwt_authorizer_function_name` deste repo são o que o módulo `app-gateway` do `infra` usa para anexar a authorizer nas rotas protegidas (ver `infra/README.md`).
+- Precisa rodar **depois** de `infra` bootstrap e `infra-db`, e **antes** de `infra` addons — os outputs `jwt_authorizer_invoke_arn`/`jwt_authorizer_function_name` e `auth_cpf_invoke_arn`/`auth_cpf_function_name` deste repo são o que o módulo `app-gateway` do `infra` usa para anexar a authorizer nas rotas protegidas e criar a integração de `POST /auth/cpf` (ver `infra/README.md`).
 - Não depende do deploy do `app` nem o `app` depende deste repo — são independentes na infra, só compartilham a chave JWT (ver abaixo).
 
 Ordem de pipeline: `infra` bootstrap → `infra-db` → **`lambda`** → `infra` addons → `app`.
 
-## O segredo (Secrets Manager)
+## CI/CD (GitHub Actions)
 
-O Terraform cria um secret `<project_name>/auth-cpf-lambda` com este formato (a lambda lê em runtime, com cache entre invocações quentes):
+- **PR para `master`** → builda as duas lambdas (`npm ci && npm test && npm run build`) e roda `terraform plan` (sem aplicar nada)
+- **Push em `master`** → builda de novo e roda `terraform apply`
 
-```json
-{
-  "jwtPrivateKey": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
-  "jwtPublicKey":  "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n",
-  "jwtIssuer":     "lata-velha",
-  "jwtExpiresIn":  3600,
-  "dbHost":        "...",
-  "dbPort":        5432,
-  "dbName":        "lata_velha",
-  "dbUser":        "...",
-  "dbPassword":    "..."
-}
-```
+Este repo também expõe seu `main.yml` como **workflow reusável** (`on: workflow_call`) — é assim
+que o `apply.sh` da raiz do mono repo (via GitHub Actions) dispara o apply deste repo na posição
+certa do pipeline, sem duplicar a lógica de build/deploy. Como este repo precisa rodar **antes**
+do `infra` addons (ver [Dependências](#dependências) acima), um push direto aqui não dispara o
+`infra` sozinho — se você quer o pipeline completo fim a fim, use o `apply.sh` da raiz do mono
+repo em vez de depender só dos workflows individuais.
 
-`dbHost`/`dbPort`/`dbName`/`dbUser`/`dbPassword` vêm automaticamente do remote state do `infra-db`. `jwtPrivateKey`/`jwtPublicKey` precisam ser exatamente o conteúdo de `app/src/main/resources/app.key` e `app.pub` do repo `app`, senão o `JwtDecoder` do app (que só conhece a chave pública dele) rejeita os tokens emitidos por esta lambda — as variáveis `jwt_private_key_pem`/`jwt_public_key_pem` já vêm com esse conteúdo como **default**, então não precisa exportar nada pra testar local. Se algum dia rotacionar essas chaves no app, atualize os defaults em `terraform/deploy/variables.tf` junto. Em CI, os secrets `TF_JWT_PRIVATE_KEY_PEM`/`TF_JWT_PUBLIC_KEY_PEM` sempre sobrescrevem o default.
+### Secrets/vars necessários no repositório
 
-As duas lambdas (`auth-cpf` e `jwt-authorizer`) leem o **mesmo secret** — a `jwt-authorizer` só usa o campo `jwtPublicKey`.
+| Nome | Tipo | Descrição |
+| --- | --- | --- |
+| `AWS_ACCESS_KEY_ID` | secret | Credencial AWS |
+| `AWS_SECRET_ACCESS_KEY` | secret | Credencial AWS |
+| `AWS_SESSION_TOKEN` | secret | Necessário no AWS Academy (roles temporárias) |
+| `AWS_REGION` | var | Região AWS (ex: `us-east-1`) |
+
+Não precisa cadastrar `TF_JWT_PRIVATE_KEY_PEM`/`TF_JWT_PUBLIC_KEY_PEM` — as variáveis já têm como default o conteúdo atual de `app.key`/`app.pub` (ver [Configuração](#configuração-variáveis-de-ambiente) abaixo). Só cadastre esses secrets, e referencie-os no workflow, se um dia rotacionar as chaves e quiser sobrescrever o default sem editar código.
+
+## Configuração (variáveis de ambiente)
+
+Sem Secrets Manager: o Terraform passa a chave JWT e as credenciais do RDS direto como
+variável de ambiente de cada `aws_lambda_function` (módulos `auth-cpf-lambda`/`jwt-authorizer-lambda`).
+A lambda lê tudo de `process.env` no cold start (`src/config.ts`/`src/authorizerConfig.ts`) — sem
+chamada de API nem cache adicional.
+
+| Variável | Quem recebe | Valor |
+|---|---|---|
+| `JWT_PRIVATE_KEY` | só `auth-cpf` | `var.jwt_private_key_pem` |
+| `JWT_PUBLIC_KEY` | as duas | `var.jwt_public_key_pem` |
+| `JWT_ISSUER` | as duas | `var.jwt_issuer` |
+| `JWT_EXPIRES_IN` | só `auth-cpf` | `var.jwt_expires_in` |
+| `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD` | só `auth-cpf` | vêm do remote state do `infra-db` |
+
+`JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` precisam ser exatamente o conteúdo de
+`app/src/main/resources/app.key` e `app.pub` do repo `app`, senão o `JwtDecoder` do app (que só
+conhece a chave pública dele) rejeita os tokens emitidos por esta lambda — as variáveis Terraform
+`jwt_private_key_pem`/`jwt_public_key_pem` já vêm com esse conteúdo como **default**, então não
+precisa exportar nada pra testar local. Se algum dia rotacionar essas chaves no app, atualize os
+defaults em `terraform/deploy/variables.tf` junto. Em CI, os secrets
+`TF_JWT_PRIVATE_KEY_PEM`/`TF_JWT_PUBLIC_KEY_PEM` sempre sobrescrevem o default.
+
+A `jwt-authorizer` recebe só `JWT_PUBLIC_KEY`/`JWT_ISSUER` — nunca a chave privada nem as
+credenciais do banco, já que ela não assina token nem acessa o RDS (menor superfície de
+exposição possível para essa função). Ver [Notas de segurança](#notas-de-segurança) sobre o
+trade-off de não usar Secrets Manager.
 
 ## Execução local (código)
 
 ```bash
 npm ci
-npm test               # jest — cpf.ts, handler.ts e authorizerHandler.ts (com db/secretsManager mockados)
+npm test               # jest — cpf.ts, handler.ts e authorizerHandler.ts (com db/config mockados)
 npm run build           # esbuild -> dist/index.js (auth-cpf) + dist/authorizer.js (jwt-authorizer)
 npm run build:login      # so a auth-cpf
 npm run build:authorizer # so a jwt-authorizer
@@ -163,7 +193,7 @@ cd terraform
 ./apply.sh                    # npm ci + test + build, depois terraform apply (confirmação interativa)
 ./apply.sh --auto             # sem confirmação
 ./apply.sh --skip-build       # pula o build do Node (usa dist/ já existente)
-./apply.sh --destroy          # remove as duas lambdas + secret
+./apply.sh --destroy          # remove as duas lambdas
 ./apply.sh --destroy --auto   # remove sem confirmação
 ```
 
@@ -189,5 +219,6 @@ terraform apply
 ## Notas de segurança
 
 - **Throttling**: a rota `POST /auth/cpf` tem rate limit próprio no API Gateway (repo `infra`, módulo `app-gateway`, `auth_cpf_throttling_rate_limit`/`auth_cpf_throttling_burst_limit`, padrão 10 req/s sustentado e 20 de rajada) — só nessa rota, não na API inteira — para dificultar brute-force de CPF (baixa entropia: dígitos verificadores são calculados, não aleatórios).
-- **`app.key`/`app.pub` estão versionados em texto plano no repo `app`** (`src/main/resources/`). Isso já era verdade antes desta function existir. Ao configurar o secret desta lambda, considere rotacionar esse par de chaves (gerar um novo, atualizar `app.key`/`app.pub` no app e o secret aqui juntos) em vez de reutilizar o par exposto — fora do escopo desta function, mas vale um follow-up.
-- O secret nunca deve ir para `terraform.tfvars` versionado — use variáveis de ambiente `TF_VAR_*` (ver exemplo acima) ou um secret de CI, como já é feito para `db_password` nos outros repos.
+- **`app.key`/`app.pub` estão versionados em texto plano no repo `app`** (`src/main/resources/`). Isso já era verdade antes desta function existir. Considere rotacionar esse par de chaves (gerar um novo, atualizar `app.key`/`app.pub` no app e as variáveis Terraform aqui juntos) em vez de reutilizar o par exposto — fora do escopo desta function, mas vale um follow-up.
+- **Sem Secrets Manager, de propósito**: a chave JWT e as credenciais do RDS vão direto como variável de ambiente da Lambda (ver [Configuração](#configuração-variáveis-de-ambiente)), não num secret gerenciado. Trade-off consciente: variável de ambiente de Lambda é visível em texto puro pra qualquer principal com permissão de leitura da function (`lambda:GetFunctionConfiguration`), um degrau abaixo de exigir `secretsmanager:GetSecretValue` — mas evita a fricção operacional real do Secrets Manager num ambiente de lab que é destruído/recriado com frequência (nome de secret fica "agendado para exclusão" por 7-30 dias após um `destroy`, bloqueando recriação com o mesmo nome). Consistente com o resto do projeto, que já versiona `app.key`/`app.pub` e a senha do Gmail em texto plano.
+- Os valores nunca devem ir para `terraform.tfvars` versionado — use variáveis de ambiente `TF_VAR_*` (ver exemplo acima) ou um secret de CI, como já é feito para `db_password` nos outros repos.

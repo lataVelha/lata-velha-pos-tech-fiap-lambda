@@ -3,14 +3,13 @@ import jwt from "jsonwebtoken";
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from "aws-lambda";
 
 jest.mock("../src/db", () => ({ findUserByCpf: jest.fn() }));
-jest.mock("../src/secretsManager", () => ({ getAuthCpfSecret: jest.fn() }));
+jest.mock("../src/config", () => ({ config: {} }));
 
 import { findUserByCpf } from "../src/db";
-import { getAuthCpfSecret, AuthCpfSecret } from "../src/secretsManager";
+import { config as mockConfig, AuthCpfConfig } from "../src/config";
 import { handler } from "../src/handler";
 
 const mockedFindUserByCpf = findUserByCpf as jest.MockedFunction<typeof findUserByCpf>;
-const mockedGetAuthCpfSecret = getAuthCpfSecret as jest.MockedFunction<typeof getAuthCpfSecret>;
 
 const { publicKey, privateKey } = generateKeyPairSync("rsa", {
   modulusLength: 2048,
@@ -18,7 +17,7 @@ const { publicKey, privateKey } = generateKeyPairSync("rsa", {
   privateKeyEncoding: { type: "pkcs8", format: "pem" },
 });
 
-const secret: AuthCpfSecret = {
+const secret: AuthCpfConfig = {
   jwtPrivateKey: privateKey,
   jwtPublicKey: publicKey,
   jwtIssuer: "lata-velha",
@@ -44,7 +43,7 @@ async function callHandler(body: unknown): Promise<APIGatewayProxyStructuredResu
 }
 
 beforeEach(() => {
-  mockedGetAuthCpfSecret.mockResolvedValue(secret);
+  Object.assign(mockConfig, secret);
 });
 
 describe("handler", () => {

@@ -2,8 +2,8 @@ locals {
   function_name = "${var.project_name}-auth-cpf"
   # AWS Academy (voclabs) nao permite iam:CreateRole/PutRolePolicy — so pode
   # USAR a LabRole pre-existente (ja tem as permissoes necessarias: logs,
-  # ENI na VPC, Secrets Manager etc.). Mesmo padrao ja usado pelos nodes do
-  # EKS no bootstrap (local.lab_role_arn).
+  # ENI na VPC etc.). Mesmo padrao ja usado pelos nodes do EKS no bootstrap
+  # (local.lab_role_arn).
   lab_role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/LabRole"
 }
 
@@ -60,7 +60,15 @@ resource "aws_lambda_function" "this" {
 
   environment {
     variables = {
-      AUTH_CPF_SECRET_ARN = var.secret_arn
+      JWT_PRIVATE_KEY = var.jwt_private_key_pem
+      JWT_PUBLIC_KEY  = var.jwt_public_key_pem
+      JWT_ISSUER      = var.jwt_issuer
+      JWT_EXPIRES_IN  = tostring(var.jwt_expires_in)
+      DB_HOST         = var.db_host
+      DB_PORT         = tostring(var.db_port)
+      DB_NAME         = var.db_name
+      DB_USER         = var.db_user
+      DB_PASSWORD     = var.db_password
     }
   }
 

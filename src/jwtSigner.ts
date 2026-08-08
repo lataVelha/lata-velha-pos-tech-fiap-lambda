@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import type { AuthCpfSecret } from "./secretsManager";
+import type { AuthCpfConfig } from "./config";
 import type { UserAuth } from "./db";
 
 export interface IssuedToken {
@@ -17,16 +17,16 @@ export interface IssuedToken {
  * usuario (UUID, o mesmo formato que UserId.fromString espera) e "scope" =
  * roles do usuario separadas por espaco.
  */
-export function issueToken(secret: AuthCpfSecret, user: UserAuth): IssuedToken {
-  const expiresIn = secret.jwtExpiresIn;
+export function issueToken(cfg: AuthCpfConfig, user: UserAuth): IssuedToken {
+  const expiresIn = cfg.jwtExpiresIn;
   const scope = user.roles.join(" ");
 
   const token = jwt.sign(
     { scope },
-    secret.jwtPrivateKey,
+    cfg.jwtPrivateKey,
     {
       algorithm: "RS256",
-      issuer: secret.jwtIssuer,
+      issuer: cfg.jwtIssuer,
       subject: user.id,
       expiresIn,
     },

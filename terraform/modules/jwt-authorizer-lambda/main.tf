@@ -31,7 +31,8 @@ resource "aws_lambda_function" "this" {
 
   environment {
     variables = {
-      AUTH_CPF_SECRET_ARN = var.secret_arn
+      JWT_PUBLIC_KEY = var.jwt_public_key_pem
+      JWT_ISSUER     = var.jwt_issuer
     }
   }
 

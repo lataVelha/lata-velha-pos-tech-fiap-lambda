@@ -3,7 +3,7 @@ import type {
   APIGatewaySimpleAuthorizerWithContextResult,
 } from "aws-lambda";
 import jwt from "jsonwebtoken";
-import { getAuthCpfSecret } from "./secretsManager";
+import { authorizerConfig } from "./authorizerConfig";
 
 interface AuthorizerContext {
   sub: string;
@@ -33,10 +33,9 @@ export async function handler(event: APIGatewayRequestAuthorizerEventV2): Promis
     const token = extractBearerToken(event);
     if (!token) return { isAuthorized: false };
 
-    const secret = await getAuthCpfSecret();
-    const decoded = jwt.verify(token, secret.jwtPublicKey, {
+    const decoded = jwt.verify(token, authorizerConfig.jwtPublicKey, {
       algorithms: ["RS256"],
-      issuer: secret.jwtIssuer,
+      issuer: authorizerConfig.jwtIssuer,
     }) as jwt.JwtPayload;
 
     return {

@@ -3,8 +3,14 @@ variable "project_name" {
   type        = string
 }
 
-variable "secret_arn" {
-  description = "ARN do secret no Secrets Manager com a chave publica RSA (JWT) — mesmo secret usado pela lambda auth-cpf"
+variable "jwt_public_key_pem" {
+  description = "Chave publica RSA (PEM) — mesma usada pela lambda auth-cpf, so pra verificar assinatura"
+  type        = string
+  sensitive   = true
+}
+
+variable "jwt_issuer" {
+  description = "Claim 'iss' esperado no token"
   type        = string
 }
 

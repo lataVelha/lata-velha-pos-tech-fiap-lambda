@@ -13,9 +13,53 @@ variable "private_subnet_ids" {
   type        = list(string)
 }
 
-variable "secret_arn" {
-  description = "ARN do secret no Secrets Manager com a chave JWT e as credenciais do banco"
+variable "jwt_private_key_pem" {
+  description = "Chave privada RSA (PEM) — mesma usada pelo app para assinar/validar tokens"
   type        = string
+  sensitive   = true
+}
+
+variable "jwt_public_key_pem" {
+  description = "Chave publica RSA (PEM) correspondente"
+  type        = string
+  sensitive   = true
+}
+
+variable "jwt_issuer" {
+  description = "Claim 'iss' do token"
+  type        = string
+}
+
+variable "jwt_expires_in" {
+  description = "Validade do token em segundos"
+  type        = number
+}
+
+variable "db_host" {
+  description = "Host do RDS"
+  type        = string
+}
+
+variable "db_port" {
+  description = "Porta do RDS"
+  type        = number
+}
+
+variable "db_name" {
+  description = "Nome do banco"
+  type        = string
+}
+
+variable "db_user" {
+  description = "Usuario do banco"
+  type        = string
+  sensitive   = true
+}
+
+variable "db_password" {
+  description = "Senha do banco"
+  type        = string
+  sensitive   = true
 }
 
 variable "dist_dir" {

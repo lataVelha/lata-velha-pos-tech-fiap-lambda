@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-import type { AuthCpfSecret } from "./secretsManager";
+import type { AuthCpfConfig } from "./config";
 
 export interface UserAuth {
   id: string; // UUID — vira o "sub" do JWT, no mesmo formato que o app espera (UserId)
@@ -13,14 +13,19 @@ export interface UserAuth {
 // nova a cada chamada.
 let pool: Pool | undefined;
 
-function getPool(secret: AuthCpfSecret): Pool {
+function getPool(cfg: AuthCpfConfig): Pool {
   if (!pool) {
     pool = new Pool({
-      host: secret.dbHost,
-      port: secret.dbPort,
-      database: secret.dbName,
-      user: secret.dbUser,
-      password: secret.dbPassword,
+      host: cfg.dbHost,
+      port: cfg.dbPort,
+      database: cfg.dbName,
+      user: cfg.dbUser,
+      password: cfg.dbPassword,
+      // O parameter group padrao do RDS Postgres exige SSL (rds.force_ssl) —
+      // sem isso a conexao cai com "no pg_hba.conf entry ... no encryption".
+      // rejectUnauthorized:false pula a validacao da CA (mesma postura
+      // pragmatica ja usada no resto do projeto pra um ambiente de lab).
+      ssl: { rejectUnauthorized: false },
       max: 1, // uma Lambda processa uma requisicao por vez
       connectionTimeoutMillis: 5000,
       idleTimeoutMillis: 30000,
@@ -42,7 +47,7 @@ const FIND_USER_BY_CPF_SQL = `
   GROUP BY u.id, u.user_name, u.ativo
 `;
 
-export async function findUserByCpf(secret: AuthCpfSecret, cpf: string): Promise<UserAuth | undefined> {
-  const result = await getPool(secret).query<UserAuth>(FIND_USER_BY_CPF_SQL, [cpf]);
+export async function findUserByCpf(cfg: AuthCpfConfig, cpf: string): Promise<UserAuth | undefined> {
+  const result = await getPool(cfg).query<UserAuth>(FIND_USER_BY_CPF_SQL, [cpf]);
   return result.rows[0];
 }

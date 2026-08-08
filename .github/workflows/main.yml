@@ -1,0 +1,193 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  # Reusavel: dá pra chamar de fora (ex: mono repo) com
+  # "uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@master".
+  # Pra isso funcionar, este repo precisa permitir acesso de fora em
+  # Settings > Actions > General > Access.
+  workflow_call:
+    inputs:
+      aws_region:
+        description: "Regiao AWS (default: var AWS_REGION deste repo)"
+        type: string
+        required: false
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      AWS_SESSION_TOKEN:
+        required: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  # ============================================================
+  # CI · PLANO
+  # Builda as duas lambdas (dist/ precisa existir — o data source
+  # archive_file le do disco mesmo num "terraform plan") e roda
+  # terraform plan em todo PR, sem aplicar nada.
+  # ============================================================
+  plan:
+    name: "CI · Build + Terraform plan"
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: terraform/deploy
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Instalar dependências
+        working-directory: .
+        run: npm ci
+
+      - name: Testes automatizados (jest)
+        working-directory: .
+        run: npm test
+
+      - name: Build (esbuild)
+        working-directory: .
+        run: npm run build
+
+      - name: Autenticar na AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Instalar Terraform 1.10
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.x"
+
+      - name: Resolver bucket de estado (S3)
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "STATE_BUCKET=lata-velha-tfstate-${ACCOUNT_ID}" >> $GITHUB_ENV
+
+      - name: Terraform Init
+        run: |
+          terraform init -reconfigure \
+            -backend-config="bucket=${STATE_BUCKET}" \
+            -backend-config="region=${{ vars.AWS_REGION }}"
+
+      - name: Terraform Plan
+        run: terraform plan
+        env:
+          TF_VAR_region:       ${{ vars.AWS_REGION }}
+          TF_VAR_state_bucket: ${{ env.STATE_BUCKET }}
+
+  # ============================================================
+  # CD · PROVISIONAR LAMBDAS (auth-cpf + jwt-authorizer)
+  # Depende do state do bootstrap (VPC/subnets) e do infra-db
+  # (endpoint/credenciais do RDS) — se algum dos dois ainda nao
+  # rodou, este job falha ao ler o remote state. Precisa rodar
+  # ANTES do infra addons (que le o ARN das duas lambdas daqui).
+  # Só roda em push para master (nunca em PR).
+  # ============================================================
+  tf-apply:
+    name: "CD · Provisionar lambdas · auth-cpf + jwt-authorizer"
+    if: github.event_name == 'workflow_call' || (github.ref == 'refs/heads/master' && github.event_name == 'push')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    concurrency:
+      group: lambda-deploy
+      cancel-in-progress: false
+
+    defaults:
+      run:
+        working-directory: terraform/deploy
+
+    env:
+      REGION: ${{ inputs.aws_region || vars.AWS_REGION }}
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Instalar dependências
+        working-directory: .
+        run: npm ci
+
+      - name: Testes automatizados (jest)
+        working-directory: .
+        run: npm test
+
+      - name: Build (esbuild)
+        working-directory: .
+        run: npm run build
+
+      - name: Autenticar na AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.REGION }}
+
+      - name: Instalar Terraform 1.10
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.x"
+
+      - name: Resolver bucket de estado (S3)
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET="lata-velha-tfstate-${ACCOUNT_ID}"
+          echo "STATE_BUCKET=${BUCKET}" >> $GITHUB_ENV
+          if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+            aws s3 mb "s3://$BUCKET" --region "${{ env.REGION }}"
+            aws s3api put-bucket-versioning \
+              --bucket "$BUCKET" \
+              --versioning-configuration Status=Enabled
+          fi
+
+      - name: Terraform Init
+        run: |
+          terraform init -reconfigure \
+            -backend-config="bucket=${STATE_BUCKET}" \
+            -backend-config="region=${{ env.REGION }}"
+
+      # TF_VAR_jwt_private_key_pem/jwt_public_key_pem NAO sao passadas aqui
+      # de proposito: as variaveis ja tem como default o mesmo conteudo de
+      # app.key/app.pub (ver terraform/deploy/variables.tf). Se um dia essas
+      # chaves forem rotacionadas, atualize os defaults la — ou cadastre
+      # TF_JWT_PRIVATE_KEY_PEM/TF_JWT_PUBLIC_KEY_PEM como secrets deste repo
+      # e referencie aqui (um secret nao configurado vira string vazia e
+      # SOBRESCREVERIA o default com um valor vazio, entao so adicione as
+      # duas linhas TF_VAR_ abaixo depois de cadastrar os secrets).
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        env:
+          TF_VAR_region:       ${{ env.REGION }}
+          TF_VAR_state_bucket: ${{ env.STATE_BUCKET }}
+
+      - name: Exportar ARNs das lambdas
+        run: terraform output

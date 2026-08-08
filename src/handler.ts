@@ -1,9 +1,9 @@
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
+import { config } from "./config";
 import { cleanCpf, isValidCpf } from "./cpf";
 import { findUserByCpf } from "./db";
 import { HttpError, InvalidCpfError, UserInativoError, UserNotFoundError } from "./httpError";
 import { issueToken } from "./jwtSigner";
-import { getAuthCpfSecret } from "./secretsManager";
 
 interface LoginCpfRequestBody {
   cpf?: unknown;
@@ -45,13 +45,12 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
   try {
     const cpf = parseCpf(event);
 
-    const secret = await getAuthCpfSecret();
-    const user = await findUserByCpf(secret, cpf);
+    const user = await findUserByCpf(config, cpf);
 
     if (!user) throw new UserNotFoundError();
     if (!user.ativo) throw new UserInativoError();
 
-    const issued = issueToken(secret, user);
+    const issued = issueToken(config, user);
     const responseBody: LoginCpfResponseBody = {
       token: issued.token,
       tokenType: "Bearer",
