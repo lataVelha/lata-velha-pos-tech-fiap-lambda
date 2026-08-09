@@ -1,0 +1,2 @@
+-r auth-cpf.txt
+pytest>=8.0,<9

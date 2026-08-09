@@ -19,12 +19,6 @@ variable "jwt_private_key_pem" {
   sensitive   = true
 }
 
-variable "jwt_public_key_pem" {
-  description = "Chave publica RSA (PEM) correspondente"
-  type        = string
-  sensitive   = true
-}
-
 variable "jwt_issuer" {
   description = "Claim 'iss' do token"
   type        = string
@@ -63,7 +57,7 @@ variable "db_password" {
 }
 
 variable "dist_dir" {
-  description = "Diretorio com o bundle da lambda ja buildado (npm run build -> dist/)"
+  description = "Diretorio com o build ja gerado (./build.sh -> build/<nome>/)"
   type        = string
 }
 

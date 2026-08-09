@@ -7,7 +7,7 @@
 # infra (addons): auth-cpf como rota POST /auth/cpf, jwt-authorizer como
 # aws_apigatewayv2_authorizer nas rotas protegidas.
 #
-#   (padrão)   npm ci && npm test && npm run build → terraform apply
+#   (padrão)   venv + pytest + build.sh → terraform apply
 #   --destroy  terraform destroy (não builda nada)
 #
 # Pré-requisitos:
@@ -17,7 +17,8 @@
 #     que precisa rodar ANTES do infra addons (que le o ARN das duas lambdas
 #     daqui). Ordem completa: infra bootstrap → infra-db → lambda (este
 #     repo) → infra addons → app.
-#   - Node.js 20+ instalado.
+#   - Python 3.9+ instalado (só pra rodar os testes localmente — o build usa
+#     wheels pre-compiladas pra Linux/3.12, não compila nada na sua máquina).
 #   - cp deploy/terraform.tfvars.example deploy/terraform.tfvars
 #     (ou exporte TF_VAR_jwt_private_key_pem / TF_VAR_jwt_public_key_pem —
 #     ver comentário no .example)
@@ -25,7 +26,7 @@
 # Uso:
 #   ./apply.sh                  — builda e sobe, com confirmação interativa
 #   ./apply.sh --auto           — builda e sobe sem confirmação
-#   ./apply.sh --skip-build     — pula npm ci/test/build (usa dist/ já existente)
+#   ./apply.sh --skip-build     — pula venv/pytest/build.sh (usa build/ já existente)
 #   ./apply.sh --destroy        — remove as duas lambdas
 #                                  (rode DEPOIS de destruir infra addons —
 #                                  o API Gateway de lá referencia as duas)
@@ -76,8 +77,16 @@ fi
 
 if [[ "$DESTROY" == "false" && "$SKIP_BUILD" == "false" ]]; then
   echo "${C_BLUE}==> Instalando dependências, testando e buildando as duas lambdas...${C_RESET}"
-  ( cd "$LAMBDA_DIR" && npm ci && npm test && npm run build )
-  echo "${C_GREEN}✓ Build concluído (dist/index.js + dist/authorizer.js).${C_RESET}"
+  (
+    cd "$LAMBDA_DIR"
+    python3 -m venv .venv
+    source .venv/bin/activate
+    pip install --quiet --upgrade pip
+    pip install --quiet -r requirements/dev.txt
+    pytest -q
+    ./build.sh
+  )
+  echo "${C_GREEN}✓ Build concluído (build/auth-cpf/ + build/jwt-authorizer/).${C_RESET}"
 fi
 
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)

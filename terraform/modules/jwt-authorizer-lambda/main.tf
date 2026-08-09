@@ -10,7 +10,7 @@ data "aws_caller_identity" "current" {}
 
 data "archive_file" "this" {
   type        = "zip"
-  source_file = "${var.dist_dir}/authorizer.js"
+  source_dir  = "${var.dist_dir}/jwt-authorizer"
   output_path = "${path.module}/build/${local.function_name}.zip"
 }
 
@@ -22,8 +22,8 @@ resource "aws_cloudwatch_log_group" "lambda" {
 resource "aws_lambda_function" "this" {
   function_name    = local.function_name
   role             = local.lab_role_arn
-  handler          = "authorizer.handler"
-  runtime          = "nodejs20.x"
+  handler          = "jwt_authorizer.handler.lambda_handler"
+  runtime          = "python3.12"
   filename         = data.archive_file.this.output_path
   source_code_hash = data.archive_file.this.output_base64sha256
   timeout          = var.timeout

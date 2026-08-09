@@ -78,7 +78,7 @@ variable "jwt_private_key_pem" {
 }
 
 variable "jwt_public_key_pem" {
-  description = "Chave publica RSA (PEM) correspondente — mesma usada pelo app em app.pub. Guardada no secret por completude, a lambda so usa a privada"
+  description = "Chave publica RSA (PEM) correspondente — mesma usada pelo app em app.pub. So a jwt-authorizer usa (verifica assinatura); a auth-cpf so assina, com a privada"
   type        = string
   sensitive   = true
   default     = <<-EOT

@@ -11,7 +11,7 @@ data "aws_caller_identity" "current" {}
 
 data "archive_file" "this" {
   type        = "zip"
-  source_file = "${var.dist_dir}/index.js"
+  source_dir  = "${var.dist_dir}/auth-cpf"
   output_path = "${path.module}/build/${local.function_name}.zip"
 }
 
@@ -46,8 +46,8 @@ resource "aws_cloudwatch_log_group" "lambda" {
 resource "aws_lambda_function" "this" {
   function_name    = local.function_name
   role             = local.lab_role_arn
-  handler          = "index.handler"
-  runtime          = "nodejs20.x"
+  handler          = "auth_cpf.handler.lambda_handler"
+  runtime          = "python3.12"
   filename         = data.archive_file.this.output_path
   source_code_hash = data.archive_file.this.output_base64sha256
   timeout          = var.timeout
@@ -61,7 +61,6 @@ resource "aws_lambda_function" "this" {
   environment {
     variables = {
       JWT_PRIVATE_KEY = var.jwt_private_key_pem
-      JWT_PUBLIC_KEY  = var.jwt_public_key_pem
       JWT_ISSUER      = var.jwt_issuer
       JWT_EXPIRES_IN  = tostring(var.jwt_expires_in)
       DB_HOST         = var.db_host

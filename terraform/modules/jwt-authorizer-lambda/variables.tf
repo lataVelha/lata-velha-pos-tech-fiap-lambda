@@ -15,7 +15,7 @@ variable "jwt_issuer" {
 }
 
 variable "dist_dir" {
-  description = "Diretorio com o bundle ja buildado (npm run build -> dist/authorizer.js)"
+  description = "Diretorio com o build ja gerado (./build.sh -> build/<nome>/)"
   type        = string
 }
 

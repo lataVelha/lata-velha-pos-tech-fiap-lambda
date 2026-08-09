@@ -39,12 +39,11 @@ module "auth_cpf_lambda" {
   project_name       = var.project_name
   vpc_id             = local.bootstrap.vpc_id
   private_subnet_ids = local.bootstrap.private_subnet_ids
-  dist_dir           = "${path.module}/../../dist"
+  dist_dir           = "${path.module}/../../build"
   timeout            = var.lambda_timeout
   memory_size        = var.lambda_memory_size
 
   jwt_private_key_pem = var.jwt_private_key_pem
-  jwt_public_key_pem  = var.jwt_public_key_pem
   jwt_issuer          = var.jwt_issuer
   jwt_expires_in      = var.jwt_expires_in
   db_host             = local.db_host
@@ -73,7 +72,7 @@ module "jwt_authorizer_lambda" {
   source = "../modules/jwt-authorizer-lambda"
 
   project_name       = var.project_name
-  dist_dir           = "${path.module}/../../dist"
+  dist_dir           = "${path.module}/../../build"
   jwt_public_key_pem = var.jwt_public_key_pem
   jwt_issuer         = var.jwt_issuer
 }
