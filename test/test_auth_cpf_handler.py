@@ -1,9 +1,9 @@
 import json
 from unittest.mock import MagicMock
 
-from auth_cpf import handler as auth_cpf_handler
-from auth_cpf.application.ports import IssuedToken
-from auth_cpf.domain.errors import InvalidCredentialsError, UserInativoError, UserNotFoundError
+from lata_velha_auth.application.ports import IssuedToken
+from lata_velha_auth.domain.errors import InvalidCredentialsError, UserInativoError, UserNotFoundError
+from lata_velha_auth.handlers import auth_cpf_handler
 
 VALID_CPF = "111.444.777-35"
 VALID_CPF_CLEAN = "11144477735"

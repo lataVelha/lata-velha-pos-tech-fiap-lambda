@@ -22,7 +22,7 @@ resource "aws_cloudwatch_log_group" "lambda" {
 resource "aws_lambda_function" "this" {
   function_name    = local.function_name
   role             = local.lab_role_arn
-  handler          = "jwt_authorizer.handler.lambda_handler"
+  handler          = "lata_velha_auth.handlers.authorizer_handler.lambda_handler"
   runtime          = "python3.12"
   filename         = data.archive_file.this.output_path
   source_code_hash = data.archive_file.this.output_base64sha256

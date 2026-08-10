@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 
-from jwt_authorizer import handler as authorizer_handler
-from jwt_authorizer.application.ports import VerifiedClaims
+from lata_velha_auth.application.ports import VerifiedClaims
+from lata_velha_auth.handlers import authorizer_handler
 
 
 def _event(authorization=None):

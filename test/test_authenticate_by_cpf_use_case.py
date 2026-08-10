@@ -2,15 +2,15 @@ from typing import Optional
 
 import pytest
 
-from auth_cpf.application.authenticate_by_cpf import AuthenticateByCpfUseCase
-from auth_cpf.application.ports import IssuedToken, PasswordVerifier, TokenSigner, UserRepository
-from auth_cpf.domain.errors import (
+from lata_velha_auth.application.authenticate_by_cpf import AuthenticateByCpfUseCase
+from lata_velha_auth.application.ports import IssuedToken, PasswordVerifier, TokenSigner, UserRepository
+from lata_velha_auth.domain.errors import (
     InvalidCpfError,
     InvalidCredentialsError,
     UserInativoError,
     UserNotFoundError,
 )
-from auth_cpf.domain.user import UserAuth
+from lata_velha_auth.domain.user import UserAuth
 
 VALID_CPF = "111.444.777-35"
 VALID_CPF_CLEAN = "11144477735"

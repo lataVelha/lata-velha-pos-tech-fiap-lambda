@@ -1,16 +1,13 @@
 from typing import Any, Dict, Optional
 
-from shared.jwt_token_service import JwtTokenVerifier
-
-from .application.authorize_token import AuthorizeTokenUseCase
-from .infrastructure.config import JwtPublicConfig
+from ..application.authorize_token import AuthorizeTokenUseCase
+from ..infrastructure.config import JwtPublicConfig
+from ..infrastructure.jwt_token_service import JwtTokenVerifier
 
 # Composition root: so a chave publica + issuer, nunca a chave privada nem
 # credenciais de banco (esta funcao nao assina token nem acessa o RDS).
 _config = JwtPublicConfig.from_env()
-_use_case = AuthorizeTokenUseCase(
-    token_verifier=JwtTokenVerifier(public_key=_config.jwt_public_key, issuer=_config.jwt_issuer)
-)
+_use_case = AuthorizeTokenUseCase(token_verifier=JwtTokenVerifier(_config))
 
 _BEARER_PREFIX = "Bearer "
 

@@ -1,4 +1,4 @@
-from auth_cpf.infrastructure.bcrypt_password_verifier import BcryptPasswordVerifier
+from lata_velha_auth.infrastructure.bcrypt_password_verifier import BcryptPasswordVerifier
 
 # Hash real gerado pelo BCryptPasswordEncoder do Spring Security (seed
 # V2__insert_data.sql, usuario admin@latavelha.com) — trava, como teste de

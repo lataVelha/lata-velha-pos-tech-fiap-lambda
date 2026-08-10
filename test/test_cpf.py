@@ -1,4 +1,4 @@
-from auth_cpf.domain.cpf import clean_cpf, is_valid_cpf
+from lata_velha_auth.domain.cpf import clean_cpf, is_valid_cpf
 
 
 def test_limpa_mascara_do_cpf():

@@ -2,13 +2,12 @@
 #
 # build.sh — empacota as duas lambdas (auth-cpf + jwt-authorizer) pra deploy.
 #
-# Cada uma vira um diretorio em build/<nome>/ com dois pacotes Python:
-# shared/ (comum as duas — env.py + jwt_token_service.py) e o pacote
-# especifico do projeto (auth_cpf/ ou jwt_authorizer/) — mais as dependencias
-# baixadas como wheel PRE-COMPILADA pra Linux x86_64 (manylinux2014), mesmo
-# rodando este script no macOS — sem isso, "pip install" compilaria (ou
-# baixaria) a wheel da SUA maquina, que nao roda no runtime da Lambda
-# (Amazon Linux).
+# Cada uma vira um diretorio em build/<nome>/ com o pacote lata_velha_auth/
+# (a mesma copia pras duas — codigo Python puro, nao tem custo empacotar o
+# que nao e usado) + as dependencias baixadas como wheel PRE-COMPILADA pra
+# Linux x86_64 (manylinux2014), mesmo rodando este script no macOS — sem
+# isso, "pip install" compilaria (ou baixaria) a wheel da SUA maquina, que
+# nao roda no runtime da Lambda (Amazon Linux).
 #
 # auth-cpf usa Postgres (pg8000) e BCrypt (bcrypt) alem de assinar o token
 # (chave privada); jwt-authorizer so verifica assinatura (chave publica) —
@@ -25,7 +24,7 @@ PLATFORM="manylinux2014_x86_64"
 rm -rf "$BUILD_DIR"
 
 build_function() {
-  local name="$1" requirements_file="$2" project_package="$3"
+  local name="$1" requirements_file="$2"
   local target="$BUILD_DIR/$name"
   mkdir -p "$target"
 
@@ -40,11 +39,10 @@ build_function() {
     --target "$target" \
     --upgrade
 
-  cp -r "$SCRIPT_DIR/src/shared" "$target/"
-  cp -r "$SCRIPT_DIR/src/$project_package" "$target/"
+  cp -r "$SCRIPT_DIR/src/lata_velha_auth" "$target/"
 }
 
-build_function "auth-cpf" "auth-cpf.txt" "auth_cpf"
-build_function "jwt-authorizer" "jwt-authorizer.txt" "jwt_authorizer"
+build_function "auth-cpf" "auth-cpf.txt"
+build_function "jwt-authorizer" "jwt-authorizer.txt"
 
 echo "Build concluido: $BUILD_DIR/auth-cpf/ e $BUILD_DIR/jwt-authorizer/"

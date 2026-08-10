@@ -44,15 +44,14 @@ do app) — é defesa em profundidade, rejeita cedo requisições sem token vál
 
 ## Camadas (Clean Architecture)
 
-Dois **projetos Python independentes** (`auth_cpf/`, `jwt_authorizer/`), cada um com suas
-próprias camadas `domain`/`application`/`infrastructure` + `handler.py` (entrypoint +
-composition root), e um pacote **`shared/`** com o que as duas genuinamente precisam: `env.py`
-e `jwt_token_service.py` (`JwtTokenSigner`/`JwtTokenVerifier`, PyJWT). `shared/` nunca importa
-nada de `auth_cpf`/`jwt_authorizer` — as `ports` de cada projeto usam `typing.Protocol` (tipagem
-estrutural) em vez de `ABC`, então `JwtTokenSigner`/`JwtTokenVerifier` satisfazem as interfaces
-esperadas sem herdar nada de lá. Isso é o que torna `AuthenticateByCpfUseCase` testável com
-repositório/assinador **fake**, sem precisar de Postgres nem mock de biblioteca (ver
-`test/test_authenticate_by_cpf_use_case.py`).
+Um pacote só (`lata_velha_auth/`), compartilhado pelas duas lambdas, com as mesmas camadas do
+`app` principal: `domain` (regras puras — CPF, `UserAuth`, exceções, zero import externo) →
+`application` (casos de uso `AuthenticateByCpfUseCase`/`AuthorizeTokenUseCase` + `ports`,
+interfaces que só dependem do `domain`) → `infrastructure` (implementa as `ports`:
+`PostgresUserRepository`, `BcryptPasswordVerifier`, `JwtTokenSigner`/`JwtTokenVerifier`) →
+`handlers` (entrypoint de cada lambda + composition root). A dependência é sempre pra dentro —
+isso é o que torna `AuthenticateByCpfUseCase` testável com repositório/assinador **fake**, sem
+precisar de Postgres nem mock de biblioteca (ver `test/test_authenticate_by_cpf_use_case.py`).
 
 ## Contrato do endpoint (`auth-cpf`)
 
@@ -78,21 +77,16 @@ A ordem de checagem (CPF → existe → ativo → senha) é a mesma do `User.log
 aceito em qualquer endpoint protegido do app.
 
 ```
-src/
-├── shared/                # env.py + jwt_token_service.py (JwtTokenSigner + JwtTokenVerifier)
-├── auth_cpf/               # projeto 1 — POST /auth/cpf
-│   ├── domain/              # cpf.py, user.py, errors.py
-│   ├── application/         # ports.py + authenticate_by_cpf.py (use case)
-│   ├── infrastructure/      # config.py, postgres_user_repository.py (pg8000), bcrypt_password_verifier.py
-│   └── handler.py           # entrypoint + composition root
-└── jwt_authorizer/         # projeto 2 — authorizer do API Gateway
-    ├── application/          # ports.py + authorize_token.py
-    ├── infrastructure/       # config.py
-    └── handler.py            # entrypoint + composition root
+src/lata_velha_auth/
+├── domain/                 # cpf.py, user.py, errors.py
+├── application/            # ports.py + authenticate_by_cpf.py + authorize_token.py (use cases)
+├── infrastructure/         # config.py, postgres_user_repository.py (pg8000),
+│                           # bcrypt_password_verifier.py, jwt_token_service.py (PyJWT)
+└── handlers/                # auth_cpf_handler.py + authorizer_handler.py (entrypoint + composition root)
 test/                     # pytest — um arquivo por módulo testado
 requirements/              # auth-cpf.txt (PyJWT+pg8000+bcrypt), jwt-authorizer.txt (só PyJWT), dev.txt
-build.sh                   # empacota build/auth-cpf/ e build/jwt-authorizer/ (shared/ + o projeto
-                            # de cada uma, wheels Linux x86_64 — funciona rodando em qualquer SO)
+build.sh                   # empacota build/auth-cpf/ e build/jwt-authorizer/ (mesmo pacote copiado
+                            # nas duas, wheels Linux x86_64 — funciona rodando em qualquer SO)
 terraform/
 ├── apply.sh                # venv + pytest + build.sh, depois apply/destroy local
 ├── modules/                 # auth-cpf-lambda (com VPC) e jwt-authorizer-lambda (sem VPC)
@@ -168,5 +162,5 @@ depois `terraform init`/`plan`/`apply` em `terraform/deploy` (backend S3, `-back
 ## Notas de segurança
 
 - **Throttling** próprio em `POST /auth/cpf` no API Gateway (10 req/s sustentado, 20 de rajada).
-- **Senha verificada com BCrypt** (mesmo algoritmo do app)
-  um hash real do seed em `test/test_bcrypt_password_verifier.py`. Nunca logada nem persistida.
+- **Senha verificada com BCrypt** (mesmo algoritmo do app) — testado contra um hash real do seed
+  em `test/test_bcrypt_password_verifier.py`. Nunca logada nem persistida.

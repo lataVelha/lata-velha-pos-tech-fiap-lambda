@@ -1,18 +1,17 @@
 import json
 from typing import Any, Dict, Optional, Tuple
 
-from shared.jwt_token_service import JwtTokenSigner
-
-from .application.authenticate_by_cpf import AuthenticateByCpfUseCase
-from .domain.errors import (
+from ..application.authenticate_by_cpf import AuthenticateByCpfUseCase
+from ..domain.errors import (
     InvalidCpfError,
     InvalidCredentialsError,
     UserInativoError,
     UserNotFoundError,
 )
-from .infrastructure.bcrypt_password_verifier import BcryptPasswordVerifier
-from .infrastructure.config import AuthCpfConfig
-from .infrastructure.postgres_user_repository import PostgresUserRepository
+from ..infrastructure.bcrypt_password_verifier import BcryptPasswordVerifier
+from ..infrastructure.config import AuthCpfConfig
+from ..infrastructure.jwt_token_service import JwtTokenSigner
+from ..infrastructure.postgres_user_repository import PostgresUserRepository
 
 # Composition root: monta as implementacoes reais das ports e injeta na use
 # case, uma vez por execution environment (cold start). Falha rapido se
@@ -21,11 +20,7 @@ _config = AuthCpfConfig.from_env()
 _use_case = AuthenticateByCpfUseCase(
     user_repository=PostgresUserRepository(_config),
     password_verifier=BcryptPasswordVerifier(),
-    token_signer=JwtTokenSigner(
-        private_key=_config.jwt_private_key,
-        issuer=_config.jwt_issuer,
-        expires_in=_config.jwt_expires_in,
-    ),
+    token_signer=JwtTokenSigner(_config),
 )
 
 

@@ -46,7 +46,7 @@ resource "aws_cloudwatch_log_group" "lambda" {
 resource "aws_lambda_function" "this" {
   function_name    = local.function_name
   role             = local.lab_role_arn
-  handler          = "auth_cpf.handler.lambda_handler"
+  handler          = "lata_velha_auth.handlers.auth_cpf_handler.lambda_handler"
   runtime          = "python3.12"
   filename         = data.archive_file.this.output_path
   source_code_hash = data.archive_file.this.output_base64sha256
