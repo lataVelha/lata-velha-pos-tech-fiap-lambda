@@ -14,6 +14,22 @@ def _event(body):
     return {"body": json.dumps(body)}
 
 
+def _get_event():
+    return {"requestContext": {"http": {"method": "GET"}}}
+
+
+def test_get_retorna_o_openapi_doc_sem_chamar_a_use_case(monkeypatch):
+    fake_use_case = MagicMock()
+    monkeypatch.setattr(auth_cpf_handler, "_use_case", fake_use_case)
+
+    result = auth_cpf_handler.lambda_handler(_get_event(), None)
+
+    assert result["statusCode"] == 200
+    body = json.loads(result["body"])
+    assert body["paths"]["/auth/cpf"]["post"]
+    fake_use_case.execute.assert_not_called()
+
+
 def test_retorna_400_quando_cpf_e_invalido():
     result = auth_cpf_handler.lambda_handler(_event({"cpf": "123", "password": PASSWORD}), None)
     assert result["statusCode"] == 400

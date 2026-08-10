@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from ..application.authenticate_by_cpf import AuthenticateByCpfUseCase
@@ -23,16 +24,29 @@ _use_case = AuthenticateByCpfUseCase(
     token_signer=JwtTokenSigner(_config),
 )
 
+# Servida tambem por esta lambda em GET /auth/cpf-openapi.json (rota separada
+# no API Gateway, mesma integracao) — o Swagger UI do app aponta pra essa URL
+# (springdoc.swagger-ui.urls) sem precisar de copia estatica no repo app.
+_OPENAPI_DOC = (Path(__file__).resolve().parent.parent / "openapi" / "auth_cpf.json").read_text()
+
 
 def _json_response(status_code: int, body: Dict[str, Any]) -> Dict[str, Any]:
+    return _raw_response(status_code, json.dumps(body))
+
+
+def _raw_response(status_code: int, raw_body: str) -> Dict[str, Any]:
     return {
         "statusCode": status_code,
         "headers": {
             "content-type": "application/json",
             "access-control-allow-origin": "*",
         },
-        "body": json.dumps(body),
+        "body": raw_body,
     }
+
+
+def _http_method(event: Dict[str, Any]) -> str:
+    return event.get("requestContext", {}).get("http", {}).get("method", "POST")
 
 
 def _parse_credentials(event: Dict[str, Any]) -> Tuple[str, Optional[str]]:
@@ -54,6 +68,9 @@ def _parse_credentials(event: Dict[str, Any]) -> Tuple[str, Optional[str]]:
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    if _http_method(event) == "GET":
+        return _raw_response(200, _OPENAPI_DOC)
+
     try:
         cpf, password = _parse_credentials(event)
         issued = _use_case.execute(cpf, password)

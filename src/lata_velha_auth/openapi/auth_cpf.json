@@ -1,0 +1,110 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Lata Velha - Auth CPF",
+    "description": "Login por CPF + senha, servido por esta lambda (auth-cpf), anexada ao mesmo API Gateway do app. Não substitui o login por email/senha (POST /auth/login) — é outro meio de fazer login, emitindo o mesmo tipo de JWT.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    { "url": "/" }
+  ],
+  "paths": {
+    "/auth/cpf": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Login por CPF + senha",
+        "description": "Autentica pelo CPF cadastrado em USERS.CPF e pela mesma senha do login por email (verificada contra o hash BCrypt em USERS.CREDENTIAL). Emite um JWT RS256 igual ao de /auth/login.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginCpfRequest" },
+              "example": { "cpf": "111.444.777-35", "password": "Admin@123" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "CPF válido, usuário existe, está ativo e a senha confere",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LoginCpfResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "CPF ausente ou mal formatado",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+                "example": { "error": "CPF invalido" }
+              }
+            }
+          },
+          "401": {
+            "description": "Senha ausente ou incorreta",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+                "example": { "error": "CPF ou senha invalidos" }
+              }
+            }
+          },
+          "403": {
+            "description": "Usuário existe mas está inativo",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+                "example": { "error": "Usuario inativo" }
+              }
+            }
+          },
+          "404": {
+            "description": "Nenhum usuário cadastrado com esse CPF",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+                "example": { "error": "Usuario nao encontrado para o CPF informado" }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha inesperada",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+                "example": { "error": "Erro interno" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LoginCpfRequest": {
+        "type": "object",
+        "required": ["cpf", "password"],
+        "properties": {
+          "cpf": { "type": "string", "example": "111.444.777-35" },
+          "password": { "type": "string", "format": "password", "example": "Admin@123" }
+        }
+      },
+      "LoginCpfResponse": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string" },
+          "tokenType": { "type": "string", "example": "Bearer" },
+          "expiresIn": { "type": "integer", "example": 3600 }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" }
+        }
+      }
+    }
+  }
+}
