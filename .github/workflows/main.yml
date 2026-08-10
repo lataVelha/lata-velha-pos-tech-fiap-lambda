@@ -46,6 +46,8 @@ jobs:
         working-directory: terraform/deploy
 
     steps:
+      # Job só roda em pull_request (nunca via workflow_call), então o
+      # checkout padrão (código da própria PR) já é o certo aqui.
       - name: Checkout do código
         uses: actions/checkout@v4
 
@@ -124,6 +126,9 @@ jobs:
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
+        with:
+          repository: lataVelha/lata-velha-pos-tech-fiap-lambda
+          ref: master
 
       - name: Configurar Python 3.12
         uses: actions/setup-python@v5
@@ -218,6 +223,9 @@ jobs:
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
+        with:
+          repository: lataVelha/lata-velha-pos-tech-fiap-lambda
+          ref: master
 
       - name: Autenticar na AWS
         uses: aws-actions/configure-aws-credentials@v4
