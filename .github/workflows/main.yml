@@ -15,6 +15,11 @@ on:
         description: "Regiao AWS (default: var AWS_REGION deste repo)"
         type: string
         required: false
+      destroy:
+        description: "Destruir as lambdas em vez de aplicar"
+        type: boolean
+        required: false
+        default: false
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
@@ -101,7 +106,7 @@ jobs:
   # ============================================================
   tf-apply:
     name: "CD · Provisionar lambdas · auth-cpf + jwt-authorizer"
-    if: github.event_name == 'workflow_call' || (github.ref == 'refs/heads/master' && github.event_name == 'push')
+    if: inputs.destroy != true && (github.event_name == 'workflow_call' || (github.ref == 'refs/heads/master' && github.event_name == 'push'))
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 
@@ -184,3 +189,62 @@ jobs:
 
       - name: Exportar ARNs das lambdas
         run: terraform output
+
+  # ============================================================
+  # CD · DESTROY DAS LAMBDAS
+  # Remove auth-cpf + jwt-authorizer — equivalente ao "./apply.sh
+  # --destroy" local (terraform/apply.sh). Não builda nada, só destrói.
+  # Rode DEPOIS de destruir o infra addons (o API Gateway de lá referencia
+  # as duas lambdas) — a ordem já é garantida pelo mono repo.
+  # Só roda quando chamado com destroy=true.
+  # ============================================================
+  destroy:
+    name: "CD · Destruir lambdas · auth-cpf + jwt-authorizer"
+    if: inputs.destroy == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    concurrency:
+      group: lambda-deploy
+      cancel-in-progress: false
+
+    defaults:
+      run:
+        working-directory: terraform/deploy
+
+    env:
+      REGION: ${{ inputs.aws_region || vars.AWS_REGION }}
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Autenticar na AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.REGION }}
+
+      - name: Instalar Terraform 1.10
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.x"
+
+      - name: Resolver bucket de estado (S3)
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "STATE_BUCKET=lata-velha-tfstate-${ACCOUNT_ID}" >> $GITHUB_ENV
+
+      - name: Terraform Init
+        run: |
+          terraform init -reconfigure \
+            -backend-config="bucket=${STATE_BUCKET}" \
+            -backend-config="region=${{ env.REGION }}"
+
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve
+        env:
+          TF_VAR_region:       ${{ env.REGION }}
+          TF_VAR_state_bucket: ${{ env.STATE_BUCKET }}
