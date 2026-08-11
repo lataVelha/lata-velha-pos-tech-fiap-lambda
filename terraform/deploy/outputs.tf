@@ -7,8 +7,7 @@ output "auth_cpf_function_arn" {
 }
 
 output "auth_cpf_invoke_arn" {
-  description = "invoke_arn da lambda auth-cpf — lido pelo repo infra (addons) para criar a rota POST /auth/cpf no API Gateway do app"
-  value       = module.auth_cpf_lambda.invoke_arn
+  value = module.auth_cpf_lambda.invoke_arn
 }
 
 output "jwt_authorizer_function_name" {
@@ -20,6 +19,15 @@ output "jwt_authorizer_function_arn" {
 }
 
 output "jwt_authorizer_invoke_arn" {
-  description = "invoke_arn da lambda authorizer — lido pelo repo infra (addons) para anexa-la ao API Gateway do app"
-  value       = module.jwt_authorizer_lambda.invoke_arn
+  value = module.jwt_authorizer_lambda.invoke_arn
+}
+
+output "jwt_authorizer_id" {
+  description = "id da aws_apigatewayv2_authorizer criada aqui — lido pelo repo app pra anexar authorization_type=CUSTOM nas rotas protegidas"
+  value       = aws_apigatewayv2_authorizer.jwt.id
+}
+
+output "auth_cpf_endpoint" {
+  description = "URL do login por CPF — mesma base do app_api_endpoint (repo infra addons), path /auth/cpf"
+  value       = "${local.addons.app_api_endpoint}auth/cpf"
 }

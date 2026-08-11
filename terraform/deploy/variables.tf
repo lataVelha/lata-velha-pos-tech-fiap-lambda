@@ -33,6 +33,12 @@ variable "infra_db_state_key" {
   default     = "lata-velha/infra-db/terraform.tfstate"
 }
 
+variable "addons_state_key" {
+  description = "Chave do state do repo infra (addons) dentro do state_bucket, de onde vem o api_id/execution_arn do API Gateway"
+  type        = string
+  default     = "lata-velha/infra-addons/terraform.tfstate"
+}
+
 
 # --- JWT ---
 # A lambda precisa assinar tokens com a MESMA chave privada RSA que o app

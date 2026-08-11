@@ -3,20 +3,19 @@
 # apply.sh — builda as duas lambdas (auth-cpf + jwt-authorizer) e sobe/derruba
 # as lambdas (chave JWT + credenciais do RDS vao direto como variavel de
 # ambiente da funcao, sem Secrets Manager). Nenhuma das duas tem API Gateway
-# proprio — sao anexadas ao UNICO API Gateway do app, criado pelo repo
-# infra (addons): auth-cpf como rota POST /auth/cpf, jwt-authorizer como
-# aws_apigatewayv2_authorizer nas rotas protegidas.
+# proprio — este script anexa as duas ao UNICO API Gateway do app (o "casco"
+# ja vem pronto do repo infra/addons, sem rota nenhuma): auth-cpf como rota
+# POST /auth/cpf, jwt-authorizer como aws_apigatewayv2_authorizer nas rotas
+# protegidas (que o repo app anexa depois).
 #
 #   (padrão)   venv + pytest + build.sh → terraform apply
 #   --destroy  terraform destroy (não builda nada)
 #
 # Pré-requisitos:
-#   - repo infra bootstrap (VPC) e infra-db (RDS) já aplicados — este script
-#     lê vpc_id/subnets e o endpoint/credenciais do RDS do state deles.
-#     infra addons NÃO precisa ter rodado ainda — ao contrário, e este repo
-#     que precisa rodar ANTES do infra addons (que le o ARN das duas lambdas
-#     daqui). Ordem completa: infra bootstrap → infra-db → lambda (este
-#     repo) → infra addons → app.
+#   - repo infra bootstrap (VPC), infra addons (API Gateway) e infra-db (RDS)
+#     já aplicados — este script lê vpc_id/subnets, o api_id do API Gateway
+#     e o endpoint/credenciais do RDS do state deles. Ordem completa: infra
+#     bootstrap → infra addons → infra-db → lambda (este repo) → app.
 #   - Python 3.9+ instalado (só pra rodar os testes localmente — o build usa
 #     wheels pre-compiladas pra Linux/3.12, não compila nada na sua máquina).
 #   - cp deploy/terraform.tfvars.example deploy/terraform.tfvars
@@ -27,9 +26,11 @@
 #   ./apply.sh                  — builda e sobe, com confirmação interativa
 #   ./apply.sh --auto           — builda e sobe sem confirmação
 #   ./apply.sh --skip-build     — pula venv/pytest/build.sh (usa build/ já existente)
-#   ./apply.sh --destroy        — remove as duas lambdas
-#                                  (rode DEPOIS de destruir infra addons —
-#                                  o API Gateway de lá referencia as duas)
+#   ./apply.sh --destroy        — remove as duas lambdas e a anexação delas
+#                                  no API Gateway (rota + authorizer)
+#                                  (rode ANTES de destruir infra addons — a
+#                                  rota/authorizer daqui referenciam o api_id
+#                                  dele)
 #   ./apply.sh --destroy --auto — remove sem confirmação
 
 set -Eeuo pipefail
@@ -72,7 +73,7 @@ else
 fi
 echo "${C_BLUE}════════════════════════════════════════════════════════════${C_RESET}"
 if $DESTROY; then
-  echo "${C_YELLOW}  Confirme que o infra addons já foi destruído antes (ele referencia as duas).${C_RESET}"
+  echo "${C_YELLOW}  Isso remove a rota /auth/cpf e a authorizer do API Gateway — rode ANTES de destruir infra addons.${C_RESET}"
 fi
 
 if [[ "$DESTROY" == "false" && "$SKIP_BUILD" == "false" ]]; then
@@ -122,6 +123,6 @@ echo "${C_BLUE}==> Provisionando as lambdas (auth-cpf + jwt-authorizer)...${C_RE
 terraform -chdir="$DEPLOY_DIR" apply $AUTO
 
 echo ""
-echo "${C_GREEN}✓ LAMBDA concluído.${C_RESET} ${C_DIM}Próximo passo: infra addons vai ler estes ARNs e anexar as${C_RESET}"
-echo "${C_DIM}  duas lambdas ao único API Gateway (rota /auth/cpf + authorizer).${C_RESET}"
+echo "${C_GREEN}✓ LAMBDA concluído.${C_RESET} ${C_DIM}Rota /auth/cpf + authorizer já anexadas no API Gateway.${C_RESET}"
+echo "${C_DIM}  Próximo passo: infra-db (se ainda não rodou) e depois o repo app.${C_RESET}"
 terraform -chdir="$DEPLOY_DIR" output

@@ -5,6 +5,9 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  # Push só roda a CI (plan em PR) — o deploy de verdade (terraform apply)
+  # só roda via disparo manual (Run workflow) ou chamado pelo mono.
+  workflow_dispatch:
   # Reusavel: dá pra chamar de fora (ex: mono repo) com
   # "uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@master".
   # Pra isso funcionar, este repo precisa permitir acesso de fora em
@@ -108,7 +111,7 @@ jobs:
   # ============================================================
   tf-apply:
     name: "CD · Provisionar lambdas · auth-cpf + jwt-authorizer"
-    if: inputs.destroy != true && (github.event_name == 'workflow_call' || (github.ref == 'refs/heads/master' && github.event_name == 'push'))
+    if: inputs.destroy != true && (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 

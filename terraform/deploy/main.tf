@@ -19,9 +19,24 @@ data "terraform_remote_state" "infra_db" {
   }
 }
 
+# Le o api_id/execution_arn do API Gateway ja criado pelo repo infra (addons)
+# — o "casco" do gateway (API + VPC Link + Stage) e' criado la, sem nenhuma
+# rota. Este repo anexa a propria rota (POST /auth/cpf + o GET do OpenAPI
+# dela) e a authorizer, direto aqui, sem precisar que o addons saiba nada
+# sobre lambda.
+data "terraform_remote_state" "addons" {
+  backend = "s3"
+  config = {
+    bucket = var.state_bucket
+    key    = var.addons_state_key
+    region = var.region
+  }
+}
+
 locals {
   bootstrap = data.terraform_remote_state.bootstrap.outputs
   infra_db  = data.terraform_remote_state.infra_db.outputs
+  addons    = data.terraform_remote_state.addons.outputs
 
   # rds_endpoint vem como "host:porta"
   db_host = split(":", local.infra_db.rds_endpoint)[0]
@@ -61,11 +76,11 @@ module "auth_cpf_lambda" {
 # lambda auth-cpf) como variavel de ambiente — sem chave privada, sem
 # credenciais do banco.
 #
-# So a FUNCAO e criada aqui — quem anexa ela ao API Gateway (aws_apigatewayv2_authorizer,
-# aws_lambda_permission, rotas protegidas) e o modulo app-gateway no repo
-# infra, que le o ARN dela (outputs.tf) via terraform_remote_state. Por isso
-# o pipeline roda infra bootstrap -> infra-db -> lambda -> infra addons ->
-# app: addons precisa que esta funcao ja exista.
+# A funcao E a anexacao dela ao API Gateway (aws_apigatewayv2_authorizer,
+# aws_lambda_permission) sao criadas aqui mesmo — o "casco" do gateway
+# (API + VPC Link + Stage) vem pronto do repo infra (addons) via
+# terraform_remote_state, sem nenhuma rota. Pipeline: infra bootstrap ->
+# infra addons -> infra-db -> lambda (aqui) -> app.
 # --------------------------------------------------------------------------
 
 module "jwt_authorizer_lambda" {
@@ -75,4 +90,74 @@ module "jwt_authorizer_lambda" {
   dist_dir           = "${path.module}/../../build"
   jwt_public_key_pem = var.jwt_public_key_pem
   jwt_issuer         = var.jwt_issuer
+}
+
+# --------------------------------------------------------------------------
+# Anexacao no API Gateway compartilhado (repo infra, addons): rota publica
+# POST /auth/cpf (+ o GET do OpenAPI dela) na lambda auth-cpf, e a lambda
+# authorizer registrada como aws_apigatewayv2_authorizer pras rotas
+# protegidas que o repo app vai criar (app le jwt_authorizer_id daqui via
+# remote_state).
+# --------------------------------------------------------------------------
+
+resource "aws_apigatewayv2_integration" "auth_cpf" {
+  api_id                 = local.addons.app_api_id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = module.auth_cpf_lambda.invoke_arn
+  integration_method     = "POST"
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "auth_cpf" {
+  api_id    = local.addons.app_api_id
+  route_key = "POST /auth/cpf"
+  target    = "integrations/${aws_apigatewayv2_integration.auth_cpf.id}"
+}
+
+resource "aws_lambda_permission" "app_gateway_invoke_auth_cpf" {
+  statement_id  = "AllowAppApiGatewayInvokeAuthCpf"
+  action        = "lambda:InvokeFunction"
+  function_name = module.auth_cpf_lambda.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${local.addons.app_api_execution_arn}/*/POST/auth/cpf"
+}
+
+# A mesma lambda tambem serve o OpenAPI do POST /auth/cpf em GET, pro Swagger
+# UI do app (springdoc.swagger-ui.urls) — sem precisar de copia estatica no
+# repo app. Rota publica de proposito, e so documentacao.
+resource "aws_apigatewayv2_route" "auth_cpf_openapi" {
+  api_id    = local.addons.app_api_id
+  route_key = "GET /auth/cpf-openapi.json"
+  target    = "integrations/${aws_apigatewayv2_integration.auth_cpf.id}"
+}
+
+resource "aws_lambda_permission" "app_gateway_invoke_auth_cpf_openapi" {
+  statement_id  = "AllowAppApiGatewayInvokeAuthCpfOpenapi"
+  action        = "lambda:InvokeFunction"
+  function_name = module.auth_cpf_lambda.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${local.addons.app_api_execution_arn}/*/GET/auth/cpf-openapi.json"
+}
+
+# Duplica na borda a verificacao de assinatura/issuer/expiracao do JWT que o
+# app ja faz. Nao decide por role, so rejeita cedo tokens invalidos/ausentes
+# antes de gastar um hop ate o ALB/pod. Autorizacao por role continua 100%
+# no SecurityConfig do app.
+resource "aws_apigatewayv2_authorizer" "jwt" {
+  api_id                            = local.addons.app_api_id
+  name                              = "${var.project_name}-jwt-authorizer"
+  authorizer_type                   = "REQUEST"
+  authorizer_uri                    = module.jwt_authorizer_lambda.invoke_arn
+  identity_sources                  = ["$request.header.Authorization"]
+  authorizer_payload_format_version = "2.0"
+  enable_simple_responses           = true
+  authorizer_result_ttl_in_seconds  = 30
+}
+
+resource "aws_lambda_permission" "app_gateway_invoke_authorizer" {
+  statement_id  = "AllowAppApiGatewayInvokeAuthorizer"
+  action        = "lambda:InvokeFunction"
+  function_name = module.jwt_authorizer_lambda.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${local.addons.app_api_execution_arn}/authorizers/${aws_apigatewayv2_authorizer.jwt.id}"
 }

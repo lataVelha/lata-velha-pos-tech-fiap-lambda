@@ -2,8 +2,10 @@
 
 Duas Lambdas (**Python 3.12**, Clean Architecture: `domain → application → infrastructure → handler`,
 mesma disciplina do `app` principal) do projeto **Lata Velha**. Nenhuma tem API Gateway próprio —
-as duas são anexadas ao **único** API Gateway do repo `infra` (módulo `app-gateway`), que lê o ARN
-de cada uma via `terraform_remote_state`:
+as duas são anexadas ao **único** API Gateway do repo `infra`. Diferente de antes, é **este
+repo** que faz a anexação (rota, integração, `aws_apigatewayv2_authorizer`) — o `infra` só cria
+o "casco" do Gateway (API + VPC Link + Stage, sem rotas); este repo lê `app_api_id`/
+`app_api_execution_arn` dele via `terraform_remote_state` e anexa:
 
 1. **`auth-cpf`** — `POST /auth/cpf`: login por **CPF + senha**, alternativa ao `/auth/login`
    (email/senha) do app. Emite o mesmo tipo de JWT, conferindo a senha contra o mesmo hash BCrypt
@@ -62,7 +64,8 @@ Content-Type: application/json
 { "cpf": "111.444.777-35", "password": "Admin@123" }
 ```
 
-`app_api_endpoint` é output do repo `infra` (`terraform/addons`).
+A base (`app_api_endpoint`) é output do repo `infra` (`terraform/addons`) — este repo lê esse
+valor e expõe o endpoint completo como próprio output (`auth_cpf_endpoint`).
 
 | Status | Quando                                                                                             |
 | ------ | -------------------------------------------------------------------------------------------------- |
@@ -96,26 +99,30 @@ terraform/
 ## Dependências e ordem do pipeline
 
 - Lê o remote state do bootstrap do repo `infra` (`vpc_id`, `private_subnet_ids` — só `auth-cpf`
-  usa, pra alcançar o RDS) e do `infra-db` (`rds_endpoint`, credenciais — só `auth-cpf`).
-- Os outputs deste repo (ARNs das duas lambdas) são o que o módulo `app-gateway` do `infra` usa
-  pra anexar a authorizer e criar a rota `/auth/cpf` — por isso precisa rodar **antes** do
-  `infra` addons.
+  usa, pra alcançar o RDS), do `infra-db` (`rds_endpoint`, credenciais — só `auth-cpf`) e do
+  `infra` **addons** (`app_api_id`, `app_api_execution_arn` — pra anexar a rota/authorizer no
+  API Gateway).
+- Este repo cria a própria `aws_apigatewayv2_authorizer`, cujo `id` (`jwt_authorizer_id`) é
+  lido pelo repo `app` — as rotas protegidas do app referenciam essa authorizer.
 
-Ordem: `infra` bootstrap → `infra-db` → **`lambda`** → `infra` addons → `app`.
+Ordem: `infra` bootstrap → `infra` addons → `infra-db` → **`lambda`** → `app`. Diferente de
+antes, este repo não precisa mais rodar antes do `infra` addons — é o contrário: lê o `api_id`
+que o addons já criou.
 
 ## CI/CD (GitHub Actions)
 
 - **PR** → instala dependências, roda `pytest`, builda (`./build.sh`) e `terraform plan`.
-- **Push em `master`** → o mesmo, e aplica (`terraform apply`).
+- **Push em `master`** → só a CI acima (testes/build/plan) — não aplica nada de verdade.
+- **`workflow_dispatch`** (Actions → Run workflow) → o deploy de verdade (`terraform apply`).
 
-Expõe `main.yml` como **workflow reusável** (`workflow_call`) — o `apply.sh` da raiz do mono repo
-chama este workflow na posição certa do pipeline. Um push direto aqui não dispara o `infra`
-addons sozinho; use o `apply.sh` da raiz para o pipeline completo.
+Expõe `main.yml` como **workflow reusável** (`workflow_call`, aceita um input `destroy` pra
+desfazer) — o mono repo chama este workflow na posição certa do pipeline
+(`uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@master`).
 
 **Secrets/vars do repositório**: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`
-(AWS Academy), `AWS_REGION` (var). `TF_JWT_PRIVATE_KEY_PEM`/`TF_JWT_PUBLIC_KEY_PEM` não são
-obrigatórios — as variáveis Terraform já têm como default o conteúdo de `app.key`/`app.pub`; só
-cadastre se rotacionar as chaves.
+(AWS Academy), `AWS_REGION` (var, opcional — default `us-east-1`). `TF_JWT_PRIVATE_KEY_PEM`/
+`TF_JWT_PUBLIC_KEY_PEM` não são obrigatórios — as variáveis Terraform já têm como default o
+conteúdo de `app.key`/`app.pub`; só cadastre se rotacionar as chaves.
 
 ## Configuração (variáveis de ambiente)
 
@@ -152,8 +159,10 @@ cd terraform
 ./apply.sh                    # venv + pytest + build.sh, terraform apply (confirmação interativa)
 ./apply.sh --auto             # sem confirmação
 ./apply.sh --skip-build       # usa build/ já existente
-./apply.sh --destroy          # remove as duas lambdas — SÓ depois do infra addons já destruído
-                               # (ele referencia as duas); apply.sh --destroy da raiz já faz isso certo
+./apply.sh --destroy          # remove as duas lambdas e a anexação delas no API Gateway —
+                               # rode ANTES de destruir o infra addons (a rota/authorizer daqui
+                               # referenciam o api_id dele); apply.sh --destroy da raiz já faz
+                               # isso na ordem certa
 ```
 
 Manualmente (sem o script): `pip install -r requirements/dev.txt && pytest -q && ./build.sh`,
@@ -161,6 +170,13 @@ depois `terraform init`/`plan`/`apply` em `terraform/deploy` (backend S3, `-back
 
 ## Notas de segurança
 
-- **Throttling** próprio em `POST /auth/cpf` no API Gateway (10 req/s sustentado, 20 de rajada).
 - **Senha verificada com BCrypt** (mesmo algoritmo do app) — testado contra um hash real do seed
   em `test/test_bcrypt_password_verifier.py`. Nunca logada nem persistida.
+- **Sem throttling dedicado** em `POST /auth/cpf` (CPF tem baixa entropia, é potencialmente
+  força-bruta-ável) — o `aws_apigatewayv2_stage` que suportaria isso agora é criado pelo repo
+  `infra`, que não conhece essa rota no momento em que cria o stage. Rate-limit ficaria por
+  conta de uma regra WAFv2 (fora do escopo atual).
+- **Chave privada RSA em texto puro** em `terraform/deploy/variables.tf` (default da variável
+  `jwt_private_key_pem`, mesma chave de `app.key` no repo `app`) — como este repo é público,
+  essa chave está exposta. Rotacionar (gerar par novo, atualizar aqui e no `app`) se isso for
+  uma preocupação real além do escopo acadêmico do projeto.
