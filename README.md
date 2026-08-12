@@ -116,6 +116,8 @@ pytest -q
 
 Pré-requisitos pro deploy: `aws configure`, `infra` bootstrap + addons + `infra-db` já aplicados.
 
+### Com o script (`apply.sh`)
+
 ```bash
 cd terraform
 ./apply.sh                    # venv + pytest + build.sh, terraform apply (confirmação interativa)
@@ -123,4 +125,31 @@ cd terraform
 ./apply.sh --skip-build       # usa build/ já existente
 ./apply.sh --destroy          # remove as duas lambdas + a anexação no API Gateway —
                                # rode ANTES de destruir o infra addons
+```
+
+### Manualmente (sem o script)
+
+Útil para depurar um `plan`/`apply` específico ou quando o build já existe.
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements/dev.txt
+pytest -q
+./build.sh
+
+REGION="us-east-1"
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+BUCKET="lata-velha-tfstate-${ACCOUNT_ID}"
+
+cd terraform/deploy
+export TF_VAR_state_bucket="$BUCKET"
+# bootstrap_state_key/infra_db_state_key/addons_state_key e as chaves JWT já
+# têm default — só exporte se quiser sobrescrever algum
+
+terraform init \
+  -backend-config="bucket=${BUCKET}" \
+  -backend-config="region=${REGION}"
+terraform plan
+terraform apply
+terraform destroy   # remove as duas lambdas — rode ANTES de destruir o infra addons
 ```
