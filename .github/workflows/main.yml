@@ -5,8 +5,9 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
-  # Push só roda a CI (plan em PR) — o deploy de verdade (terraform apply)
-  # só roda via disparo manual (Run workflow) ou chamado pelo mono.
+  # Push pra master builda e aplica de verdade (terraform apply).
+  # workflow_dispatch existe pra permitir disparo manual (com destroy=true,
+  # por exemplo) fora de um push.
   workflow_dispatch:
     inputs:
       destroy:
@@ -116,7 +117,7 @@ jobs:
   # ============================================================
   tf-apply:
     name: "CD · Provisionar lambdas · auth-cpf + jwt-authorizer"
-    if: inputs.destroy != true && (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch')
+    if: inputs.destroy != true && (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/master' && github.event_name == 'push'))
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 

@@ -78,8 +78,9 @@ Ordem: `infra` bootstrap → `infra` addons → `infra-db` → **`lambda`** → 
 ## CI/CD (GitHub Actions)
 
 - **PR** → instala dependências, roda `pytest`, builda (`./build.sh`) e `terraform plan`.
-- **Push em `master`** → só a CI acima — não aplica nada de verdade.
-- **`workflow_dispatch`** (Actions → Run workflow) → o deploy de verdade (`terraform apply`).
+- **Push em `master`** → o mesmo, e aplica de verdade (`terraform apply`).
+- **`workflow_dispatch`** (Actions → Run workflow) → dispara manualmente fora de um push, com
+  a opção `destroy` pra desfazer.
 
 Expõe `main.yml` como **workflow reusável** (aceita um input `destroy` pra desfazer) — o mono
 repo chama este workflow na posição certa do pipeline.
