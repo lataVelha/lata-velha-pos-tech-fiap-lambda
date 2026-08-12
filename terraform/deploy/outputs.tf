@@ -23,11 +23,11 @@ output "jwt_authorizer_invoke_arn" {
 }
 
 output "jwt_authorizer_id" {
-  description = "id da aws_apigatewayv2_authorizer criada aqui — lido pelo repo app pra anexar authorization_type=CUSTOM nas rotas protegidas"
+  description = "Usado pelo repo app nas rotas protegidas"
   value       = aws_apigatewayv2_authorizer.jwt.id
 }
 
 output "auth_cpf_endpoint" {
-  description = "URL do login por CPF — mesma base do app_api_endpoint (repo infra addons), path /auth/cpf"
+  description = "URL do login por CPF"
   value       = "${local.addons.app_api_endpoint}auth/cpf"
 }
