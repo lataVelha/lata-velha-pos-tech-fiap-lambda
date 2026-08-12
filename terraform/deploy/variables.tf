@@ -17,24 +17,24 @@ variable "environment" {
 }
 
 variable "state_bucket" {
-  description = "Bucket S3 com o estado do bootstrap (VPC) e do infra-db (RDS) — e onde este state tambem sera gravado"
+  description = "Bucket S3 do state (bootstrap, infra-db e este)"
   type        = string
 }
 
 variable "bootstrap_state_key" {
-  description = "Chave do state do bootstrap (repo infra) dentro do state_bucket, de onde vem vpc_id/subnets"
+  description = "Chave do state do bootstrap — vpc_id/subnets"
   type        = string
   default     = "lata-velha/bootstrap/terraform.tfstate"
 }
 
 variable "infra_db_state_key" {
-  description = "Chave do state do infra-db dentro do state_bucket, de onde vem o endpoint/credenciais do RDS"
+  description = "Chave do state do infra-db — endpoint/credenciais do RDS"
   type        = string
   default     = "lata-velha/infra-db/terraform.tfstate"
 }
 
 variable "addons_state_key" {
-  description = "Chave do state do repo infra (addons) dentro do state_bucket, de onde vem o api_id/execution_arn do API Gateway"
+  description = "Chave do state do infra addons — api_id/execution_arn"
   type        = string
   default     = "lata-velha/infra-addons/terraform.tfstate"
 }
@@ -84,7 +84,7 @@ variable "jwt_private_key_pem" {
 }
 
 variable "jwt_public_key_pem" {
-  description = "Chave publica RSA (PEM) correspondente — mesma usada pelo app em app.pub. So a jwt-authorizer usa (verifica assinatura); a auth-cpf so assina, com a privada"
+  description = "Chave publica RSA (PEM) — mesma do app.pub, so a jwt-authorizer usa"
   type        = string
   sensitive   = true
   default     = <<-EOT

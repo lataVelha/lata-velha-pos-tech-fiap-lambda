@@ -8,6 +8,11 @@ on:
   # Push só roda a CI (plan em PR) — o deploy de verdade (terraform apply)
   # só roda via disparo manual (Run workflow) ou chamado pelo mono.
   workflow_dispatch:
+    inputs:
+      destroy:
+        description: "Destruir as lambdas (e a anexação delas no API Gateway) em vez de aplicar"
+        type: boolean
+        default: false
   # Reusavel: dá pra chamar de fora (ex: mono repo) com
   # "uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@master".
   # Pra isso funcionar, este repo precisa permitir acesso de fora em
