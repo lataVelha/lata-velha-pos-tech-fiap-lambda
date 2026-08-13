@@ -9,13 +9,13 @@ Gateway do repo `infra` (que só cria o "casco": API + VPC Link + Stage, sem rot
    (email/senha) do app. Confere a senha contra o mesmo hash BCrypt (`USERS.CREDENTIAL`) e emite
    o mesmo tipo de JWT.
 2. **`jwt-authorizer`** — anexada como `aws_apigatewayv2_authorizer` nas rotas protegidas do
-   mesmo API Gateway (criadas pelo repo `app`), valida o JWT antes da requisição chegar no ALB.
+   mesmo API Gateway, valida o JWT antes da requisição chegar no ALB.
 
 ## Sumário
 
 - [Arquitetura](#arquitetura)
 - [Contrato do endpoint (`auth-cpf`)](#contrato-do-endpoint-auth-cpf)
-- [Dependências e ordem do pipeline](#dependências-e-ordem-do-pipeline)
+- [Dependências](#dependências)
 - [CI/CD (GitHub Actions)](#cicd-github-actions)
 - [Configuração (variáveis de ambiente)](#configuração-variáveis-de-ambiente)
 - [Execução e deploy](#execução-e-deploy)
@@ -66,14 +66,13 @@ output (`auth_cpf_endpoint`).
 Mesma ordem de checagem do `User.login()` do app. O token é aceito em qualquer endpoint
 protegido do app.
 
-## Dependências e ordem do pipeline
+## Dependências
 
-Lê o remote state do `infra` bootstrap (`vpc_id`/subnets, só `auth-cpf` usa pra alcançar o RDS),
-do `infra-db` (credenciais do RDS, só `auth-cpf`) e do `infra` **addons** (`app_api_id`/
-`app_api_execution_arn`, pra anexar a rota/authorizer). O `jwt_authorizer_id` criado aqui é lido
-pelo repo `app`, que o usa nas próprias rotas protegidas.
-
-Ordem: `infra` bootstrap → `infra` addons → `infra-db` → **`lambda`** → `app`.
+Lê o remote state do bootstrap e do addons do repo
+[`infra`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra) (`vpc_id`/subnets;
+`app_api_id`/`app_api_execution_arn`, pra anexar a rota/authorizer) e do
+[`infra-db`](https://github.com/lataVelha/lata-velha-pos-tech-fiap-infra-db) (credenciais do
+RDS). Publica `jwt_authorizer_id` pra quem usar.
 
 ## CI/CD (GitHub Actions)
 
