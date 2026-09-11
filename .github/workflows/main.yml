@@ -254,16 +254,16 @@ jobs:
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           echo "STATE_BUCKET=lata-velha-tfstate-${ACCOUNT_ID}" >> $GITHUB_ENV
 
+      - name: Criar diretórios vazios para archive_file
+        run: |
+          mkdir -p build/auth-cpf
+          mkdir -p build/jwt-authorizer
+
       - name: Terraform Init
         run: |
           terraform init -reconfigure \
             -backend-config="bucket=${STATE_BUCKET}" \
             -backend-config="region=${{ env.REGION }}"
-
-      - name: Criar diretórios vazios para archive_file
-        run: |
-          mkdir -p build/auth-cpf
-          mkdir -p build/jwt-authorizer
 
       - name: Terraform Destroy
         run: terraform destroy -auto-approve
