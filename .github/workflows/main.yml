@@ -260,6 +260,11 @@ jobs:
             -backend-config="bucket=${STATE_BUCKET}" \
             -backend-config="region=${{ env.REGION }}"
 
+      - name: Criar diretórios vazios para archive_file
+        run: |
+          mkdir -p build/auth-cpf
+          mkdir -p build/jwt-authorizer
+
       - name: Terraform Destroy
         run: terraform destroy -auto-approve
         env:
