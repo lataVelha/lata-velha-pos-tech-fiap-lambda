@@ -258,6 +258,8 @@ jobs:
         run: |
           mkdir -p ${{ github.workspace }}/build/auth-cpf
           mkdir -p ${{ github.workspace }}/build/jwt-authorizer
+          touch ${{ github.workspace }}/build/auth-cpf/.gitkeep
+          touch ${{ github.workspace }}/build/jwt-authorizer/.gitkeep
           ls -la ${{ github.workspace }}/build/
 
       - name: Terraform Init
