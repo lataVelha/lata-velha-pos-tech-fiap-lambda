@@ -256,8 +256,9 @@ jobs:
 
       - name: Criar diretórios vazios para archive_file
         run: |
-          mkdir -p ../../build/auth-cpf
-          mkdir -p ../../build/jwt-authorizer
+          mkdir -p ${{ github.workspace }}/build/auth-cpf
+          mkdir -p ${{ github.workspace }}/build/jwt-authorizer
+          ls -la ${{ github.workspace }}/build/
 
       - name: Terraform Init
         run: |
