@@ -124,3 +124,26 @@ variable "lambda_memory_size" {
   type        = number
   default     = 256
 }
+
+# --- D1 · Datadog ---
+# Cadastrar TF_VAR_dd_api_key como secret do repo lambda (mesmo valor do
+# TF_VAR_dd_api_key do repo infra). dd_site default = us5 (mesmo site do
+# Agent do EKS e do docker-compose).
+variable "dd_api_key" {
+  description = "Datadog API key para a Extension das lambdas (traces/metricas/logs)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "dd_site" {
+  description = "Site Datadog de destino das lambdas"
+  type        = string
+  default     = "us5.datadoghq.com"
+}
+
+variable "dd_version" {
+  description = "Tag 'version' do Datadog nas lambdas (ex.: tag da imagem/build). Vazio = sem tag"
+  type        = string
+  default     = ""
+}

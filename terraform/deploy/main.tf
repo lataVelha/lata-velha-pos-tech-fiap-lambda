@@ -52,11 +52,18 @@ module "auth_cpf_lambda" {
   source = "../modules/auth-cpf-lambda"
 
   project_name       = var.project_name
+  region             = var.region
   vpc_id             = local.bootstrap.vpc_id
   private_subnet_ids = local.bootstrap.private_subnet_ids
   dist_dir           = "${path.module}/../../build"
   timeout            = var.lambda_timeout
   memory_size        = var.lambda_memory_size
+
+  # D1 · Datadog: envio direto de traces/metricas/logs da lambda p/ o site us5
+  dd_api_key  = var.dd_api_key
+  dd_site     = var.dd_site
+  dd_env      = var.environment
+  dd_version  = var.dd_version
 
   jwt_private_key_pem = var.jwt_private_key_pem
   jwt_issuer          = var.jwt_issuer
@@ -87,9 +94,16 @@ module "jwt_authorizer_lambda" {
   source = "../modules/jwt-authorizer-lambda"
 
   project_name       = var.project_name
+  region             = var.region
   dist_dir           = "${path.module}/../../build"
   jwt_public_key_pem = var.jwt_public_key_pem
   jwt_issuer         = var.jwt_issuer
+
+  # D1 · Datadog: envio direto de traces/metricas/logs p/ o site us5
+  dd_api_key = var.dd_api_key
+  dd_site    = var.dd_site
+  dd_env     = var.environment
+  dd_version = var.dd_version
 }
 
 # --------------------------------------------------------------------------
