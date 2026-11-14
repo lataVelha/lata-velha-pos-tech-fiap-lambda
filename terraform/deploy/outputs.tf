@@ -23,11 +23,11 @@ output "jwt_authorizer_invoke_arn" {
 }
 
 output "jwt_authorizer_id" {
-  description = "Usado pelo repo app nas rotas protegidas"
+  description = "Usado pelo stack edge nas rotas protegidas"
   value       = aws_apigatewayv2_authorizer.jwt.id
 }
 
 output "auth_cpf_endpoint" {
-  description = "URL do login por CPF"
+  description = "URL do login por CPF (lambda auth-cpf, lendo o RDS do os-service)"
   value       = "${local.addons.app_api_endpoint}auth/cpf"
 }

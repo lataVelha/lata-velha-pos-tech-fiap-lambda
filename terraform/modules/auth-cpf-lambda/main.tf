@@ -16,7 +16,7 @@ data "archive_file" "this" {
 }
 
 # --------------------------- REDE (SG da lambda) ----------------------------
-# O SG do RDS (repo infra-db) libera ingress para toda a VPC_CIDR, entao
+# O SG do RDS do os-service libera ingress para toda a VPC_CIDR, entao
 # a lambda so precisa de egress para alcancar o RDS, o Secrets Manager e a
 # internet (via NAT, ja habilitado no bootstrap da VPC).
 resource "aws_security_group" "lambda" {

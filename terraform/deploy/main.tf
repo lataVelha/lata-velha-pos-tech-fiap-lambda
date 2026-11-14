@@ -1,6 +1,7 @@
 # Le os outputs do bootstrap (repo infra) para obter vpc_id/subnets privadas
-# e do infra-db para obter o endpoint/credenciais do RDS — a lambda roda na
-# mesma VPC do banco (o SG do RDS ja libera ingress para toda a VPC_CIDR).
+# e do os-service para obter endpoint/credenciais do RDS PROPRIO do os-service.
+# A lambda roda na mesma VPC do banco (o SG do RDS do os-service libera
+# ingress para toda a VPC_CIDR).
 data "terraform_remote_state" "bootstrap" {
   backend = "s3"
   config = {
@@ -10,11 +11,11 @@ data "terraform_remote_state" "bootstrap" {
   }
 }
 
-data "terraform_remote_state" "infra_db" {
+data "terraform_remote_state" "os_service" {
   backend = "s3"
   config = {
     bucket = var.state_bucket
-    key    = var.infra_db_state_key
+    key    = var.os_service_state_key
     region = var.region
   }
 }
@@ -34,20 +35,20 @@ data "terraform_remote_state" "addons" {
 }
 
 locals {
-  bootstrap = data.terraform_remote_state.bootstrap.outputs
-  infra_db  = data.terraform_remote_state.infra_db.outputs
-  addons    = data.terraform_remote_state.addons.outputs
+  bootstrap  = data.terraform_remote_state.bootstrap.outputs
+  os_service = data.terraform_remote_state.os_service.outputs
+  addons     = data.terraform_remote_state.addons.outputs
 
   # rds_endpoint vem como "host:porta"
-  db_host = split(":", local.infra_db.rds_endpoint)[0]
-  db_port = tonumber(split(":", local.infra_db.rds_endpoint)[1])
+  db_host = split(":", local.os_service.rds_endpoint)[0]
+  db_port = tonumber(split(":", local.os_service.rds_endpoint)[1])
 }
 
-# Fonte unica da chave JWT (RS256) e das credenciais do banco para a lambda —
-# passadas direto como variavel de ambiente da function (sem Secrets Manager,
-# ver lambda/README.md). A chave privada aqui PRECISA ser a mesma configurada
-# em app.key/app.pub no app (JwtConfig.java) — do contrario o JwtDecoder do
-# app rejeita os tokens emitidos por esta function.
+# Fonte unica da chave JWT (RS256) e das credenciais do banco do os-service
+# para a lambda — passadas direto como variavel de ambiente da function (sem
+# Secrets Manager, ver lambda/README.md). A chave privada aqui PRECISA ser a
+# mesma configurada em app.key/app.pub no os-service (JwtConfig.java) — do
+# contrario o JwtDecoder do os-service rejeita os tokens emitidos aqui.
 module "auth_cpf_lambda" {
   source = "../modules/auth-cpf-lambda"
 
@@ -63,24 +64,17 @@ module "auth_cpf_lambda" {
   jwt_expires_in      = var.jwt_expires_in
   db_host             = local.db_host
   db_port             = local.db_port
-  db_name             = local.infra_db.db_name
-  db_user             = local.infra_db.db_username
-  db_password         = local.infra_db.db_password
+  db_name             = local.os_service.db_name
+  db_user             = local.os_service.db_username
+  db_password         = local.os_service.db_password
 }
 
 # --------------------------------------------------------------------------
-# Lambda authorizer do API Gateway do app (repo infra). Duplica, na borda,
-# a mesma verificacao de assinatura/issuer/expiracao que o JwtDecoder do app
-# ja faz — nao decide autorizacao por role, isso continua 100% no
-# SecurityConfig do app. Recebe so a chave publica RSA + issuer (mesma da
-# lambda auth-cpf) como variavel de ambiente — sem chave privada, sem
-# credenciais do banco.
-#
-# A funcao E a anexacao dela ao API Gateway (aws_apigatewayv2_authorizer,
-# aws_lambda_permission) sao criadas aqui mesmo — o "casco" do gateway
-# (API + VPC Link + Stage) vem pronto do repo infra (addons) via
-# terraform_remote_state, sem nenhuma rota. Pipeline: infra bootstrap ->
-# infra addons -> infra-db -> lambda (aqui) -> app.
+# Lambda authorizer do API Gateway. Duplica, na borda, a mesma verificacao
+# de assinatura/issuer/expiracao que o JwtDecoder do os-service ja faz — nao
+# decide autorizacao por role, isso continua 100% no SecurityConfig do
+# os-service. Recebe so a chave publica RSA + issuer — sem chave privada,
+# sem credenciais do banco.
 # --------------------------------------------------------------------------
 
 module "jwt_authorizer_lambda" {
@@ -96,8 +90,7 @@ module "jwt_authorizer_lambda" {
 # Anexacao no API Gateway compartilhado (repo infra, addons): rota publica
 # POST /auth/cpf (+ o GET do OpenAPI dela) na lambda auth-cpf, e a lambda
 # authorizer registrada como aws_apigatewayv2_authorizer pras rotas
-# protegidas que o repo app vai criar (app le jwt_authorizer_id daqui via
-# remote_state).
+# protegidas que o stack edge cria.
 # --------------------------------------------------------------------------
 
 resource "aws_apigatewayv2_integration" "auth_cpf" {
@@ -122,9 +115,9 @@ resource "aws_lambda_permission" "app_gateway_invoke_auth_cpf" {
   source_arn    = "${local.addons.app_api_execution_arn}/*/POST/auth/cpf"
 }
 
-# A mesma lambda tambem serve o OpenAPI do POST /auth/cpf em GET, pro Swagger
-# UI do app (springdoc.swagger-ui.urls) — sem precisar de copia estatica no
-# repo app. Rota publica de proposito, e so documentacao.
+# A mesma lambda tambem serve o OpenAPI do POST /auth/cpf em GET, pro
+# Swagger UI (springdoc.swagger-ui.urls) — sem precisar de copia estatica.
+# Rota publica de proposito, e so documentacao.
 resource "aws_apigatewayv2_route" "auth_cpf_openapi" {
   api_id    = local.addons.app_api_id
   route_key = "GET /auth/cpf-openapi.json"
@@ -140,9 +133,8 @@ resource "aws_lambda_permission" "app_gateway_invoke_auth_cpf_openapi" {
 }
 
 # Duplica na borda a verificacao de assinatura/issuer/expiracao do JWT que o
-# app ja faz. Nao decide por role, so rejeita cedo tokens invalidos/ausentes
-# antes de gastar um hop ate o ALB/pod. Autorizacao por role continua 100%
-# no SecurityConfig do app.
+# os-service ja faz. Nao decide por role, so rejeita cedo tokens
+# invalidos/ausentes antes de gastar um hop ate o ALB/pod.
 resource "aws_apigatewayv2_authorizer" "jwt" {
   api_id                            = local.addons.app_api_id
   name                              = "${var.project_name}-jwt-authorizer"
