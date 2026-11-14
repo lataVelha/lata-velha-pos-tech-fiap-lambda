@@ -1,10 +1,14 @@
 state_bucket = "lata-velha-tfstate-<ACCOUNT_ID>"
 
-# Cole aqui EXATAMENTE o conteudo de app/src/main/resources/app.key e
-# app.pub (o app usa esse par para assinar/validar os tokens hoje). Se
-# preferir nao versionar nem em .tfvars local, exporte como variavel de
-# ambiente em vez de preencher aqui:
-#   export TF_VAR_jwt_private_key_pem="$(cat ../../app/src/main/resources/app.key)"
-#   export TF_VAR_jwt_public_key_pem="$(cat ../../app/src/main/resources/app.pub)"
+# A lambda auth-cpf consulta o RDS PROPRIO do os-service (state
+# lata-velha/os-service/terraform.tfstate). O default abaixo normalmente
+# basta; sobrescreva so se o state key mudar.
+# os_service_state_key = "lata-velha/os-service/terraform.tfstate"
+
+# Cole aqui EXATAMENTE o conteudo de app.key e app.pub do os-service (o
+# os-service usa esse par para assinar/validar os tokens). Se preferir nao
+# versionar nem em .tfvars local, exporte como variavel de ambiente:
+#   export TF_VAR_jwt_private_key_pem="$(cat ../../os-service/src/main/resources/app.key)"
+#   export TF_VAR_jwt_public_key_pem="$(cat ../../os-service/src/main/resources/app.pub)"
 jwt_private_key_pem = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 jwt_public_key_pem  = "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n"

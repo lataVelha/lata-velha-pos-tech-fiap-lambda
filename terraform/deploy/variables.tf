@@ -17,7 +17,7 @@ variable "environment" {
 }
 
 variable "state_bucket" {
-  description = "Bucket S3 do state (bootstrap, infra-db e este)"
+  description = "Bucket S3 do state (bootstrap, os-service, addons e este)"
   type        = string
 }
 
@@ -27,10 +27,10 @@ variable "bootstrap_state_key" {
   default     = "lata-velha/bootstrap/terraform.tfstate"
 }
 
-variable "infra_db_state_key" {
-  description = "Chave do state do infra-db — endpoint/credenciais do RDS"
+variable "os_service_state_key" {
+  description = "Chave do state do os-service — endpoint/credenciais do RDS proprio dele"
   type        = string
-  default     = "lata-velha/infra-db/terraform.tfstate"
+  default     = "lata-velha/os-service/terraform.tfstate"
 }
 
 variable "addons_state_key" {
@@ -41,14 +41,13 @@ variable "addons_state_key" {
 
 
 # --- JWT ---
-# A lambda precisa assinar tokens com a MESMA chave privada RSA que o app
-# usa para validar (classpath:app.key / app.pub, ver JwtConfig.java).
-# Default = conteudo atual de app.key/app.pub, so para nao precisar exportar
-# TF_VAR_* toda vez rodando local. Em CI, os secrets TF_JWT_PRIVATE_KEY_PEM/
-# TF_JWT_PUBLIC_KEY_PEM sempre sobrescrevem este default. Se algum dia
-# rotacionar as chaves no app, atualize os defaults abaixo tambem.
+# A lambda auth-cpf assina tokens com a MESMA chave privada RSA do
+# os-service (classpath:app.key / app.pub, ver JwtConfig.java). Default =
+# conteudo atual de app.key/app.pub, so para nao precisar exportar TF_VAR_*
+# toda vez rodando local. Em CI, secrets TF_JWT_PRIVATE_KEY_PEM/
+# TF_JWT_PUBLIC_KEY_PEM sobrescrevem estes defaults.
 variable "jwt_private_key_pem" {
-  description = "Chave privada RSA (PEM, PKCS8) — mesma usada pelo app em app.key"
+  description = "Chave privada RSA (PEM, PKCS8) — mesma usada pelo os-service em app.key"
   type        = string
   sensitive   = true
   default     = <<-EOT
@@ -101,13 +100,13 @@ variable "jwt_public_key_pem" {
 }
 
 variable "jwt_issuer" {
-  description = "Claim 'iss' do token — precisa bater com JWT_ISSUER do app"
+  description = "Claim 'iss' do token — precisa bater com JWT_ISSUER do os-service"
   type        = string
   default     = "lata-velha"
 }
 
 variable "jwt_expires_in" {
-  description = "Validade do token em segundos — precisa bater com JWT_EXPIRES_IN do app"
+  description = "Validade do token em segundos — precisa bater com JWT_EXPIRES_IN do os-service"
   type        = number
   default     = 3600
 }
