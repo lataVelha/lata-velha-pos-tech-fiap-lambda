@@ -29,16 +29,40 @@ _use_case = AuthenticateByCpfUseCase(
 # (springdoc.swagger-ui.urls) sem precisar de copia estatica no repo app.
 _OPENAPI_DOC = (Path(__file__).resolve().parent.parent / "openapi" / "auth_cpf.json").read_text()
 
+_SWAGGER_UI_HTML = """\
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Auth CPF — Lata Velha</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script>
+      SwaggerUIBundle({
+        url: "/auth/cpf-openapi.json",
+        dom_id: "#swagger-ui",
+        presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+        layout: "StandaloneLayout"
+      });
+    </script>
+  </body>
+</html>
+"""
+
 
 def _json_response(status_code: int, body: Dict[str, Any]) -> Dict[str, Any]:
     return _raw_response(status_code, json.dumps(body))
 
 
-def _raw_response(status_code: int, raw_body: str) -> Dict[str, Any]:
+def _raw_response(status_code: int, raw_body: str, content_type: str = "application/json") -> Dict[str, Any]:
     return {
         "statusCode": status_code,
         "headers": {
-            "content-type": "application/json",
+            "content-type": content_type,
             "access-control-allow-origin": "*",
         },
         "body": raw_body,
@@ -47,6 +71,10 @@ def _raw_response(status_code: int, raw_body: str) -> Dict[str, Any]:
 
 def _http_method(event: Dict[str, Any]) -> str:
     return event.get("requestContext", {}).get("http", {}).get("method", "POST")
+
+
+def _http_path(event: Dict[str, Any]) -> str:
+    return event.get("requestContext", {}).get("http", {}).get("path", "")
 
 
 def _parse_credentials(event: Dict[str, Any]) -> Tuple[str, Optional[str]]:
@@ -69,6 +97,8 @@ def _parse_credentials(event: Dict[str, Any]) -> Tuple[str, Optional[str]]:
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     if _http_method(event) == "GET":
+        if _http_path(event).endswith("/swagger-ui.html"):
+            return _raw_response(200, _SWAGGER_UI_HTML, "text/html")
         return _raw_response(200, _OPENAPI_DOC)
 
     try:
