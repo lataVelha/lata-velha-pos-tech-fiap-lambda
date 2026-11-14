@@ -132,6 +132,23 @@ resource "aws_lambda_permission" "app_gateway_invoke_auth_cpf_openapi" {
   source_arn    = "${local.addons.app_api_execution_arn}/*/GET/auth/cpf-openapi.json"
 }
 
+# Swagger UI da lambda auth-cpf — rota publica que retorna o HTML do Swagger.
+# Nao pode usar /auth/{proxy+} no edge (esse apontaria pro ALB); precisa de
+# rota propria aqui, direto para a integracao Lambda.
+resource "aws_apigatewayv2_route" "auth_cpf_swagger" {
+  api_id    = local.addons.app_api_id
+  route_key = "GET /auth/swagger-ui.html"
+  target    = "integrations/${aws_apigatewayv2_integration.auth_cpf.id}"
+}
+
+resource "aws_lambda_permission" "app_gateway_invoke_auth_cpf_swagger" {
+  statement_id  = "AllowAppApiGatewayInvokeAuthCpfSwagger"
+  action        = "lambda:InvokeFunction"
+  function_name = module.auth_cpf_lambda.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${local.addons.app_api_execution_arn}/*/GET/auth/swagger-ui.html"
+}
+
 # Duplica na borda a verificacao de assinatura/issuer/expiracao do JWT que o
 # os-service ja faz. Nao decide por role, so rejeita cedo tokens
 # invalidos/ausentes antes de gastar um hop ate o ALB/pod.
