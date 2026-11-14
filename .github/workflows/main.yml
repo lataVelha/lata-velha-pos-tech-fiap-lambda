@@ -36,8 +36,54 @@ on:
         required: true
       AWS_SESSION_TOKEN:
         required: false
+      SONAR_TOKEN:
+        required: false
 
 jobs:
+  # ============================================================
+  # CI · SONARQUBE CLOUD
+  # Análise estática + cobertura (pytest-cov). Roda só no repositório da
+  # lambda: quando o mono chama este workflow (workflow_call), o
+  # `github.repository` é o do mono e o job é pulado.
+  # ============================================================
+  sonar:
+    name: "CI · SonarQube Cloud"
+    if: inputs.destroy != true && github.repository == 'lataVelha/lata-velha-pos-tech-fiap-lambda'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      # Sem o secret (ex.: PR de fork) a análise é pulada, mas os testes rodam.
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Sonar: histórico completo para SCM/blame
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements/dev.txt
+
+      - name: Testes com cobertura (pytest-cov)
+        run: |
+          pip install -r requirements/dev.txt
+          # --cov=<pacote> (e não --cov=src) para o coverage.xml sair com
+          # caminhos "src/lata_velha_auth/..." e casar com sonar.sources=src.
+          pytest -q --cov=lata_velha_auth --cov-report=xml:coverage.xml
+
+      - name: SonarQube Cloud
+        if: env.SONAR_TOKEN != ''
+        uses: SonarSource/sonarqube-scan-action@v8
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY || format('{0}_{1}', github.repository_owner, github.event.repository.name) }}
+
   # ============================================================
   # CI · PLANO
   # Builda as duas lambdas (build/ precisa existir — o data source
