@@ -19,3 +19,7 @@ terraform/**/*_override.tf
 terraform/**/*_override.tf.json
 terraform/**/crash.log
 terraform/**/crash.*.log
+
+### Coverage (Sonar) ###
+coverage.xml
+.coverage
