@@ -1,5 +1,7 @@
 from typing import Any, Dict, Optional
 
+from datadog_lambda.wrapper import datadog_lambda_wrapper
+
 from ..application.authorize_token import AuthorizeTokenUseCase
 from ..infrastructure.config import JwtPublicConfig
 from ..infrastructure.jwt_token_service import JwtTokenVerifier
@@ -20,6 +22,7 @@ def _extract_bearer_token(event: Dict[str, Any]) -> Optional[str]:
     return header[len(_BEARER_PREFIX):].strip()
 
 
+@datadog_lambda_wrapper
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda authorizer (REQUEST, payload 2.0, simple response) do API Gateway
@@ -31,12 +34,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     token = _extract_bearer_token(event)
     if not token:
+        # Decisão de negócio, não erro 5xx: o span fica OK e o log permite
+        # distinguir "sem token" de "token inválido/expirado".
+        print("auth.result=denied reason=missing_token")
         return {"isAuthorized": False}
 
     try:
         claims = _use_case.execute(token)
     except Exception as error:  # noqa: BLE001 — qualquer falha de verificacao nega o acesso
-        print(f"Token rejeitado pelo authorizer: {error}")
+        # Nunca logar o token: só o tipo da falha.
+        print(f"auth.result=denied reason={type(error).__name__}")
         return {"isAuthorized": False}
 
     return {

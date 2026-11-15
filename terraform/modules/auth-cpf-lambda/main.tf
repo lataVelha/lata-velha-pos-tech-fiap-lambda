@@ -53,6 +53,12 @@ resource "aws_lambda_function" "this" {
   timeout          = var.timeout
   memory_size      = var.memory_size
 
+  # Datadog Lambda Extension: envia traces/logs direto ao intake do site us5,
+  # sem depender da integração AWS (que fica desligada no AWS Academy).
+  layers = [
+    "arn:aws:lambda:${var.aws_region}:464622532012:layer:Datadog-Extension:${var.dd_extension_version}",
+  ]
+
   vpc_config {
     subnet_ids         = var.private_subnet_ids
     security_group_ids = [aws_security_group.lambda.id]
@@ -68,6 +74,18 @@ resource "aws_lambda_function" "this" {
       DB_NAME         = var.db_name
       DB_USER         = var.db_user
       DB_PASSWORD     = var.db_password
+
+      # Datadog serverless (Story 20.1)
+      DD_API_KEY                            = var.dd_api_key
+      DD_SITE                               = var.dd_site
+      DD_ENV                                = var.environment
+      DD_SERVICE                            = local.function_name
+      DD_VERSION                            = var.service_version
+      DD_TRACE_ENABLED                      = "true"
+      DD_LOGS_INJECTION                     = "true"
+      DD_SERVERLESS_LOGS_ENABLED            = "true"
+      DD_TRACE_PROPAGATION_STYLE_EXTRACT    = "datadog,tracecontext"
+      DD_TRACE_PROPAGATION_STYLE_INJECT     = "datadog,tracecontext"
     }
   }
 

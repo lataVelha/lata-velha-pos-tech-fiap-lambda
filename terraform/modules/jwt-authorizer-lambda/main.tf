@@ -29,10 +29,27 @@ resource "aws_lambda_function" "this" {
   timeout          = var.timeout
   memory_size      = var.memory_size
 
+  # Datadog Lambda Extension: traces/logs da authorizer (Story 20.1).
+  layers = [
+    "arn:aws:lambda:${var.aws_region}:464622532012:layer:Datadog-Extension:${var.dd_extension_version}",
+  ]
+
   environment {
     variables = {
       JWT_PUBLIC_KEY = var.jwt_public_key_pem
       JWT_ISSUER     = var.jwt_issuer
+
+      # Datadog serverless (Story 20.1)
+      DD_API_KEY                         = var.dd_api_key
+      DD_SITE                            = var.dd_site
+      DD_ENV                             = var.environment
+      DD_SERVICE                         = local.function_name
+      DD_VERSION                         = var.service_version
+      DD_TRACE_ENABLED                   = "true"
+      DD_LOGS_INJECTION                  = "true"
+      DD_SERVERLESS_LOGS_ENABLED         = "true"
+      DD_TRACE_PROPAGATION_STYLE_EXTRACT = "datadog,tracecontext"
+      DD_TRACE_PROPAGATION_STYLE_INJECT  = "datadog,tracecontext"
     }
   }
 

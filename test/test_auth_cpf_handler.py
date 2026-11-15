@@ -104,3 +104,10 @@ def test_retorna_500_quando_algo_inesperado_falha(monkeypatch):
     result = auth_cpf_handler.lambda_handler(_event({"cpf": VALID_CPF, "password": PASSWORD}), None)
 
     assert result["statusCode"] == 500
+
+
+def test_handler_esta_embrulhado_pelo_datadog():
+    """Story 20.1 / DT-DD-31: o lambda_handler precisa estar decorado."""
+    handler = auth_cpf_handler.lambda_handler
+    assert hasattr(handler, "func")
+    assert handler.func.__name__ == "lambda_handler"

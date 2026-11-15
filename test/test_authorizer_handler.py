@@ -50,3 +50,19 @@ def test_autoriza_token_valido_e_propaga_sub_scope(monkeypatch):
             "scope": "USER ATENDENTE",
         },
     }
+
+
+def test_handler_esta_embrulhado_pelo_datadog():
+    """Story 20.1 / DT-DD-31: o lambda_handler precisa estar decorado."""
+    handler = authorizer_handler.lambda_handler
+    assert hasattr(handler, "func")
+    assert handler.func.__name__ == "lambda_handler"
+
+
+def test_negacao_sem_token_loga_decisao_de_negocio(capsys):
+    """Story 20.1 / AC4: negação é decisão de negócio, não erro 5xx."""
+    result = authorizer_handler.lambda_handler(_event(), None)
+    captured = capsys.readouterr()
+    assert result == {"isAuthorized": False}
+    assert "auth.result=denied" in captured.out
+    assert "missing_token" in captured.out

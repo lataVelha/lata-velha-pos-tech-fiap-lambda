@@ -11,9 +11,28 @@ variable "project_name" {
 }
 
 variable "environment" {
-  description = "Ambiente (dev, staging, prod)"
+  description = "Ambiente (dev, staging, prod) — também vira DD_ENV"
+  type        = string
+  default     = "prod"
+}
+
+variable "service_version" {
+  description = "Versão publicada (DD_VERSION) — o CI passa o SHA do commit"
   type        = string
   default     = "dev"
+}
+
+variable "dd_api_key" {
+  description = "API key do Datadog (sensitive) — via TF_VAR_dd_api_key/GitHub Secret"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "dd_extension_version" {
+  description = "Versão da layer Datadog Lambda Extension"
+  type        = string
+  default     = "103"
 }
 
 variable "state_bucket" {

@@ -36,3 +36,36 @@ variable "log_retention_days" {
   type        = number
   default     = 14
 }
+
+variable "aws_region" {
+  description = "Região AWS — usada para montar o ARN da layer da Datadog"
+  type        = string
+}
+
+variable "environment" {
+  description = "Ambiente do Datadog (DD_ENV)"
+  type        = string
+}
+
+variable "service_version" {
+  description = "Versão publicada (DD_VERSION)"
+  type        = string
+}
+
+variable "dd_api_key" {
+  description = "API key do Datadog (sensitive)"
+  type        = string
+  sensitive   = true
+}
+
+variable "dd_site" {
+  description = "Site do Datadog"
+  type        = string
+  default     = "us5.datadoghq.com"
+}
+
+variable "dd_extension_version" {
+  description = "Versão da layer Datadog Lambda Extension"
+  type        = string
+  default     = "103"
+}

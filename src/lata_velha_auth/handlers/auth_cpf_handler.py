@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
+from datadog_lambda.wrapper import datadog_lambda_wrapper
+
 from ..application.authenticate_by_cpf import AuthenticateByCpfUseCase
 from ..domain.errors import (
     InvalidCpfError,
@@ -96,6 +98,7 @@ def _parse_credentials(event: Dict[str, Any]) -> Tuple[str, Optional[str]]:
     return cpf, password
 
 
+@datadog_lambda_wrapper
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     if _http_method(event) == "GET":
         if _http_path(event).endswith("/swagger-ui.html"):

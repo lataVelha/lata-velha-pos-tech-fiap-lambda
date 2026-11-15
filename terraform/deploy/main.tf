@@ -59,6 +59,12 @@ module "auth_cpf_lambda" {
   timeout            = var.lambda_timeout
   memory_size        = var.lambda_memory_size
 
+  aws_region           = var.region
+  environment          = var.environment
+  service_version      = var.service_version
+  dd_api_key           = var.dd_api_key
+  dd_extension_version = var.dd_extension_version
+
   jwt_private_key_pem = var.jwt_private_key_pem
   jwt_issuer          = var.jwt_issuer
   jwt_expires_in      = var.jwt_expires_in
@@ -82,6 +88,13 @@ module "jwt_authorizer_lambda" {
 
   project_name       = var.project_name
   dist_dir           = "${path.module}/../../build"
+
+  aws_region           = var.region
+  environment          = var.environment
+  service_version      = var.service_version
+  dd_api_key           = var.dd_api_key
+  dd_extension_version = var.dd_extension_version
+
   jwt_public_key_pem = var.jwt_public_key_pem
   jwt_issuer         = var.jwt_issuer
 }
