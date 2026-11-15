@@ -44,5 +44,8 @@ build_function() {
 
 build_function "auth-cpf" "auth-cpf.txt"
 build_function "jwt-authorizer" "jwt-authorizer.txt"
+# Forwarder de access logs do API Gateway (Story 20.2) — stdlib apenas.
+build_function "logs-forwarder" "logs-forwarder.txt"
+cp -r "$SCRIPT_DIR/src/lata_velha_logs_forwarder" "$BUILD_DIR/logs-forwarder/"
 
-echo "Build concluido: $BUILD_DIR/auth-cpf/ e $BUILD_DIR/jwt-authorizer/"
+echo "Build concluido: $BUILD_DIR/auth-cpf/, $BUILD_DIR/jwt-authorizer/ e $BUILD_DIR/logs-forwarder/"

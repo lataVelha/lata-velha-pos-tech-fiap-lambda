@@ -76,6 +76,24 @@ module "auth_cpf_lambda" {
 }
 
 # --------------------------------------------------------------------------
+# Forwarder dos access logs do API Gateway (Story 20.2).
+# Assina o log group do addons e envia ao Datadog Logs API; sem IP/PII.
+# --------------------------------------------------------------------------
+module "logs_forwarder_lambda" {
+  source = "../modules/logs-forwarder-lambda"
+
+  project_name    = var.project_name
+  dist_dir        = "${path.module}/../../build"
+  log_group_name  = local.addons.app_api_log_group_name
+  log_group_arn   = local.addons.app_api_log_group_arn
+  dd_api_key      = var.dd_api_key
+  dd_env          = var.environment
+  service_version = var.service_version
+  timeout         = 30
+  memory_size     = 256
+}
+
+# --------------------------------------------------------------------------
 # Lambda authorizer do API Gateway. Duplica, na borda, a mesma verificacao
 # de assinatura/issuer/expiracao que o JwtDecoder do os-service ja faz — nao
 # decide autorizacao por role, isso continua 100% no SecurityConfig do
