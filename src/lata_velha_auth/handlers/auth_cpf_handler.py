@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -98,8 +99,28 @@ def _parse_credentials(event: Dict[str, Any]) -> Tuple[str, Optional[str]]:
     return cpf, password
 
 
+def _log_trace(message: str) -> None:
+    """Log JSON com trace_id/span_id para correlação no Datadog (Story 20.1)."""
+    payload: Dict[str, Any] = {
+        "message": message,
+        "service": "lata-velha-auth-cpf",
+        "env": os.environ.get("DD_ENV", "prod"),
+    }
+    try:
+        from ddtrace import tracer
+
+        span = tracer.current_span()
+        if span is not None:
+            payload["trace_id"] = format(span.trace_id, "032x")
+            payload["span_id"] = format(span.span_id, "016x")
+    except Exception:  # noqa: BLE001 - telemetria não pode derrubar o login
+        pass
+    print(json.dumps(payload))
+
+
 @datadog_lambda_wrapper
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    _log_trace("auth-cpf invocation")
     if _http_method(event) == "GET":
         if _http_path(event).endswith("/swagger-ui.html"):
             return _raw_response(200, _SWAGGER_UI_HTML, "text/html")
