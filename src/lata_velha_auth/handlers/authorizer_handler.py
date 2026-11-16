@@ -38,6 +38,7 @@ def _log_trace(message: str) -> None:
         if span is not None:
             payload["trace_id"] = format(span.trace_id, "032x")
             payload["span_id"] = format(span.span_id, "016x")
+            payload["traceparent"] = _current_traceparent()
     except Exception:  # noqa: BLE001 - telemetria não pode derrubar a autorização
         pass
     print(json.dumps(payload))
