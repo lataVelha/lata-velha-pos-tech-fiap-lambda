@@ -43,6 +43,25 @@ def _log_trace(message: str) -> None:
     print(json.dumps(payload))
 
 
+def _current_traceparent() -> Optional[str]:
+    """W3C traceparent do span atual, para a borda repassar ao ALB/EKS.
+
+    O API Gateway não injeta W3C nas integrações HTTP_PROXY; o authorizer é o
+    único ponto instrumentado no caminho das rotas protegidas. Devolver o
+    traceparent no context permite que o edge o envie como header e o
+    Spring Boot OTel dos serviços continue o trace (em vez de abrir um root).
+    """
+    try:
+        from ddtrace import tracer
+
+        span = tracer.current_span()
+        if span is None:
+            return None
+        return f"00-{span.trace_id:032x}-{span.span_id:016x}-01"
+    except Exception:  # noqa: BLE001 - correlação é best-effort, auth não depende dela
+        return None
+
+
 @datadog_lambda_wrapper
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
@@ -68,10 +87,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         print(f"auth.result=denied reason={type(error).__name__}")
         return {"isAuthorized": False}
 
+    context = {
+        "sub": claims.sub,
+        "scope": claims.scope,
+    }
+    traceparent = _current_traceparent()
+    if traceparent:
+        context["traceparent"] = traceparent
     return {
         "isAuthorized": True,
-        "context": {
-            "sub": claims.sub,
-            "scope": claims.scope,
-        },
+        "context": context,
     }

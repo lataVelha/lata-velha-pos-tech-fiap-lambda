@@ -14,6 +14,10 @@ on:
         description: "Destruir as lambdas (e a anexação delas no API Gateway) em vez de aplicar"
         type: boolean
         default: false
+      ref:
+        description: "Branch/tag do repo lambda para o deploy (default: master)"
+        type: string
+        default: "master"
   # Reusavel: dá pra chamar de fora (ex: mono repo) com
   # "uses: lataVelha/lata-velha-pos-tech-fiap-lambda/.github/workflows/main.yml@master".
   # Pra isso funcionar, este repo precisa permitir acesso de fora em
