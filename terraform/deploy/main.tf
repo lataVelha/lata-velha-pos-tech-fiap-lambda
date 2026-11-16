@@ -201,3 +201,32 @@ resource "aws_lambda_permission" "app_gateway_invoke_authorizer" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${local.addons.app_api_execution_arn}/authorizers/${aws_apigatewayv2_authorizer.jwt.id}"
 }
+
+# --------------------------------------------------------------------------
+# Story 20.3 (fallback AWS Academy): o LabRole não pode invocar o API
+# destination do EventBridge, então o alarme CloudWatch é encaminhado para a
+# Lambda logs-forwarder (resource-based permission, sem role de target).
+# A Lambda transforma o evento e publica no Datadog Events API.
+# --------------------------------------------------------------------------
+resource "aws_cloudwatch_event_rule" "cloudwatch_alarm" {
+  name        = "lata-velha-cloudwatch-alarms-forwarder"
+  description = "Encaminha mudanças de estado dos alarmes CloudWatch para o Datadog via Lambda"
+
+  event_pattern = jsonencode({
+    source        = ["aws.cloudwatch"]
+    "detail-type" = ["CloudWatch Alarm State Change"]
+  })
+}
+
+resource "aws_cloudwatch_event_target" "logs_forwarder" {
+  rule = aws_cloudwatch_event_rule.cloudwatch_alarm.name
+  arn  = module.logs_forwarder_lambda.function_arn
+}
+
+resource "aws_lambda_permission" "events_forwarder" {
+  statement_id  = "AllowEventBridgeInvokeLogsForwarder"
+  action        = "lambda:InvokeFunction"
+  function_name = module.logs_forwarder_lambda.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.cloudwatch_alarm.arn
+}

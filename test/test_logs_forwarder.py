@@ -49,3 +49,28 @@ def test_forwarder_ignora_payload_invalido():
         result = forwarder.handler(event, None)
     assert result["body"] == "forwarded=0"
     post.assert_called_once_with([])
+
+
+def test_forwarder_encaminha_evento_cloudwatch():
+    sent = {}
+
+    def fake_post(payload):
+        sent["payload"] = payload
+
+    event = {
+        "source": "aws.cloudwatch",
+        "detail-type": "CloudWatch Alarm State Change",
+        "detail": {
+            "alarmName": "lata-velha-os-service-events-dlq-messages",
+            "state": {"value": "ALARM", "reason": "Threshold crossed"},
+        },
+    }
+    with patch.object(forwarder, "_post_event", side_effect=fake_post):
+        result = forwarder.handler(event, None)
+
+    assert result["statusCode"] == 200
+    assert "alarm=lata-velha-os-service-events-dlq-messages" in result["body"]
+    payload = sent["payload"]
+    assert payload["alert_type"] == "error"
+    assert payload["title"] == "CloudWatch alarm lata-velha-os-service-events-dlq-messages"
+    assert "source:cloudwatch" in payload["tags"]

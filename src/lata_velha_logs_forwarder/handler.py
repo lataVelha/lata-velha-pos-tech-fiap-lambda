@@ -116,7 +116,42 @@ def _post_to_datadog(logs: list[dict[str, Any]]) -> None:
         print(f"datadog.logs.http_error status={error.code}")
 
 
+def _post_event(payload: dict[str, Any]) -> None:
+    if not DD_API_KEY:
+        return
+    url = f"https://api.{DD_SITE}/api/v1/events"
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers={"Content-Type": "application/json", "DD-API-KEY": DD_API_KEY},
+    )
+    with urllib.request.urlopen(request, timeout=10) as response:
+        response.read()
+
+
+def _handle_cloudwatch_event(event: dict[str, Any]) -> dict[str, Any]:
+    detail = event.get("detail") or {}
+    state = (detail.get("state") or {}).get("value", "UNKNOWN")
+    alarm = detail.get("alarmName", "unknown")
+    reason = (detail.get("state") or {}).get("reason", "")
+    alert_type = "error" if state == "ALARM" else "success" if state == "OK" else "warning"
+    _post_event(
+        {
+            "title": f"CloudWatch alarm {alarm}",
+            "text": f"State: {state}. Reason: {reason}",
+            "alert_type": alert_type,
+            "source_type_name": "amazon cloudwatch",
+            "tags": ["source:cloudwatch", f"env:{DD_ENV}", f"alarm:{alarm}"],
+        }
+    )
+    return {"statusCode": 200, "body": f"event forwarded alarm={alarm} state={state}"}
+
+
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
+    if event.get("source") == "aws.cloudwatch" or event.get("detail-type") == "CloudWatch Alarm State Change":
+        return _handle_cloudwatch_event(event)
     records = _decode_cloudwatch_event(event)
     logs = [sanitize_record(record) for record in records]
     _post_to_datadog(logs)
