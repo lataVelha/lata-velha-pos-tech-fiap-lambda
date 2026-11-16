@@ -71,6 +71,7 @@ def test_forwarder_encaminha_evento_cloudwatch():
     assert result["statusCode"] == 200
     assert "alarm=lata-velha-os-service-events-dlq-messages" in result["body"]
     payload = sent["payload"]
-    assert payload["alert_type"] == "error"
-    assert payload["title"] == "CloudWatch alarm lata-velha-os-service-events-dlq-messages"
-    assert "source:cloudwatch" in payload["tags"]
+    attributes = payload["data"]["attributes"]
+    assert attributes["attributes"]["status"] == "error"
+    assert attributes["title"] == "CloudWatch alarm lata-velha-os-service-events-dlq-messages"
+    assert "source:cloudwatch" in attributes["tags"]

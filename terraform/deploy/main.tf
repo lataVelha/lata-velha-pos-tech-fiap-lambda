@@ -87,6 +87,7 @@ module "logs_forwarder_lambda" {
   log_group_name  = local.addons.app_api_log_group_name
   log_group_arn   = local.addons.app_api_log_group_arn
   dd_api_key      = var.dd_api_key
+  dd_app_key      = var.dd_app_key
   dd_env          = var.environment
   service_version = var.service_version
   timeout         = 30

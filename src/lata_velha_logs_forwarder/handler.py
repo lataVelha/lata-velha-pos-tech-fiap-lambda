@@ -23,6 +23,7 @@ from typing import Any
 
 DD_SITE = os.environ.get("DD_SITE", "us5.datadoghq.com")
 DD_API_KEY = os.environ.get("DD_API_KEY", "")
+DD_APP_KEY = os.environ.get("DD_APP_KEY", "")
 DD_ENV = os.environ.get("DD_ENV", "prod")
 SERVICE = "lata-velha-edge"
 
@@ -119,14 +120,13 @@ def _post_to_datadog(logs: list[dict[str, Any]]) -> None:
 def _post_event(payload: dict[str, Any]) -> None:
     if not DD_API_KEY:
         return
-    url = f"https://api.{DD_SITE}/api/v1/events"
+    # Event Management API v2 (v1 /api/v1/events está depreciada).
+    url = f"https://event-management-intake.{DD_SITE}/api/v2/events"
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    request = urllib.request.Request(
-        url,
-        data=body,
-        method="POST",
-        headers={"Content-Type": "application/json", "DD-API-KEY": DD_API_KEY},
-    )
+    headers = {"Content-Type": "application/json", "DD-API-KEY": DD_API_KEY}
+    if DD_APP_KEY:
+        headers["DD-APPLICATION-KEY"] = DD_APP_KEY
+    request = urllib.request.Request(url, data=body, method="POST", headers=headers)
     with urllib.request.urlopen(request, timeout=10) as response:
         response.read()
 
@@ -136,16 +136,26 @@ def _handle_cloudwatch_event(event: dict[str, Any]) -> dict[str, Any]:
     state = (detail.get("state") or {}).get("value", "UNKNOWN")
     alarm = detail.get("alarmName", "unknown")
     reason = (detail.get("state") or {}).get("reason", "")
-    alert_type = "error" if state == "ALARM" else "success" if state == "OK" else "warning"
+    status = "error" if state == "ALARM" else "ok" if state == "OK" else "warn"
     _post_event(
         {
-            "title": f"CloudWatch alarm {alarm}",
-            "text": f"State: {state}. Reason: {reason}",
-            "alert_type": alert_type,
-            "source_type_name": "amazon cloudwatch",
-            "tags": ["source:cloudwatch", f"env:{DD_ENV}", f"alarm:{alarm}"],
+            "data": {
+                "attributes": {
+                    "attributes": {
+                        "status": status,
+                        "custom": {"alarm": alarm, "state": state, "reason": reason},
+                    },
+                    "category": "alert",
+                    "integration_id": "custom-events",
+                    "message": f"State: {state}. Reason: {reason}",
+                    "tags": ["source:cloudwatch", f"env:{DD_ENV}", f"alarm:{alarm}"],
+                    "title": f"CloudWatch alarm {alarm}",
+                },
+                "type": "event",
+            }
         }
     )
+    print(f"datadog.event.sent alarm={alarm} state={state} status={status}")
     return {"statusCode": 200, "body": f"event forwarded alarm={alarm} state={state}"}
 
 

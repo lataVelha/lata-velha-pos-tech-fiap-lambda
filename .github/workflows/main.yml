@@ -45,6 +45,8 @@ on:
         required: false
       TF_VAR_dd_api_key:
         required: false
+      TF_VAR_dd_app_key:
+        required: false
 
 jobs:
   # ============================================================
@@ -183,6 +185,7 @@ jobs:
           TF_VAR_state_bucket:    ${{ env.STATE_BUCKET }}
           TF_VAR_service_version: ${{ github.sha }}
           TF_VAR_dd_api_key:      ${{ secrets.TF_VAR_dd_api_key || secrets.TF_VAR_DD_API_KEY }}
+          TF_VAR_dd_app_key:      ${{ secrets.TF_VAR_dd_app_key || secrets.TF_VAR_DD_APP_KEY }}
 
   # ============================================================
   # CD · PROVISIONAR LAMBDAS (auth-cpf + jwt-authorizer)
@@ -276,6 +279,7 @@ jobs:
           TF_VAR_state_bucket:    ${{ env.STATE_BUCKET }}
           TF_VAR_service_version: ${{ github.sha }}
           TF_VAR_dd_api_key:      ${{ secrets.TF_VAR_dd_api_key || secrets.TF_VAR_DD_API_KEY }}
+          TF_VAR_dd_app_key:      ${{ secrets.TF_VAR_dd_app_key || secrets.TF_VAR_DD_APP_KEY }}
 
       - name: Exportar ARNs das lambdas
         run: terraform output

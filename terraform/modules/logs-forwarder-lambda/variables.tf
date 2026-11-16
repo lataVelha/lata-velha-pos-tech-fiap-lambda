@@ -59,3 +59,10 @@ variable "log_retention_days" {
   type        = number
   default     = 14
 }
+
+variable "dd_app_key" {
+  description = "Application key do Datadog (sensitive) — usada no Event Management API v2"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

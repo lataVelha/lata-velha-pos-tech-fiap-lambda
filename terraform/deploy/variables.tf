@@ -142,3 +142,10 @@ variable "lambda_memory_size" {
   type        = number
   default     = 256
 }
+
+variable "dd_app_key" {
+  description = "Application key do Datadog (sensitive) — Event Management API v2"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

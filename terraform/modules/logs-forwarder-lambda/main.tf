@@ -26,6 +26,7 @@ resource "aws_lambda_function" "this" {
   environment {
     variables = {
       DD_API_KEY     = var.dd_api_key
+      DD_APP_KEY     = var.dd_app_key
       DD_SITE        = var.dd_site
       DD_ENV         = var.dd_env
       DD_SERVICE     = "lata-velha-edge"
