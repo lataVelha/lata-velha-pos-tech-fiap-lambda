@@ -102,9 +102,10 @@ resource "aws_apigatewayv2_integration" "auth_cpf" {
 }
 
 resource "aws_apigatewayv2_route" "auth_cpf" {
-  api_id    = local.addons.app_api_id
-  route_key = "POST /auth/cpf"
-  target    = "integrations/${aws_apigatewayv2_integration.auth_cpf.id}"
+  api_id             = local.addons.app_api_id
+  route_key          = "POST /auth/cpf"
+  authorization_type = "NONE"
+  target             = "integrations/${aws_apigatewayv2_integration.auth_cpf.id}"
 }
 
 resource "aws_lambda_permission" "app_gateway_invoke_auth_cpf" {
@@ -119,9 +120,10 @@ resource "aws_lambda_permission" "app_gateway_invoke_auth_cpf" {
 # Swagger UI (springdoc.swagger-ui.urls) — sem precisar de copia estatica.
 # Rota publica de proposito, e so documentacao.
 resource "aws_apigatewayv2_route" "auth_cpf_openapi" {
-  api_id    = local.addons.app_api_id
-  route_key = "GET /auth/cpf-openapi.json"
-  target    = "integrations/${aws_apigatewayv2_integration.auth_cpf.id}"
+  api_id             = local.addons.app_api_id
+  route_key          = "GET /auth/cpf-openapi.json"
+  authorization_type = "NONE"
+  target             = "integrations/${aws_apigatewayv2_integration.auth_cpf.id}"
 }
 
 resource "aws_lambda_permission" "app_gateway_invoke_auth_cpf_openapi" {
@@ -136,9 +138,10 @@ resource "aws_lambda_permission" "app_gateway_invoke_auth_cpf_openapi" {
 # Nao pode usar /auth/{proxy+} no edge (esse apontaria pro ALB); precisa de
 # rota propria aqui, direto para a integracao Lambda.
 resource "aws_apigatewayv2_route" "auth_cpf_swagger" {
-  api_id    = local.addons.app_api_id
-  route_key = "GET /auth/swagger-ui.html"
-  target    = "integrations/${aws_apigatewayv2_integration.auth_cpf.id}"
+  api_id             = local.addons.app_api_id
+  route_key          = "GET /auth/swagger-ui.html"
+  authorization_type = "NONE"
+  target             = "integrations/${aws_apigatewayv2_integration.auth_cpf.id}"
 }
 
 resource "aws_lambda_permission" "app_gateway_invoke_auth_cpf_swagger" {
